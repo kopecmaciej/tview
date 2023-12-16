@@ -81,6 +81,9 @@ type List struct {
 	// of the right arrow key.
 	overflowing bool
 
+	// If true, main text will be inlined with secondary text
+	inlined bool
+
 	// An optional function which is called when the user has navigated to a
 	// list item.
 	changed func(index int, mainText, secondaryText string, shortcut rune)
@@ -467,6 +470,13 @@ func (l *List) Clear() *List {
 	return l
 }
 
+// SetInlined sets the flag that determines whether the secondary text is
+// inlined with the main text.
+func (l *List) SetInlined(inlined bool) *List {
+	l.inlined = inlined
+	return l
+}
+
 // Draw draws this primitive onto the screen.
 func (l *List) Draw(screen tcell.Screen) {
 	l.Box.DrawForSubclass(screen, l)
@@ -543,23 +553,28 @@ func (l *List) Draw(screen tcell.Screen) {
 			}
 		}
 
-		y++
-
 		if y >= bottomLimit {
 			break
 		}
 
 		// Secondary text.
 		if l.showSecondaryText {
-			_, end, printedWidth := printWithStyle(screen, item.SecondaryText, x, y, l.horizontalOffset, width, AlignLeft, l.secondaryTextStyle, true)
+			sX := x
+			if l.inlined {
+				sX = x + TaggedStringWidth(item.MainText) + 1
+			} else {
+				y++
+			}
+			_, end, printedWidth := printWithStyle(screen, item.SecondaryText, sX, y, l.horizontalOffset, width, AlignLeft, l.secondaryTextStyle, true)
 			if printedWidth > maxWidth {
 				maxWidth = printedWidth
 			}
 			if end < len(item.SecondaryText) {
 				overflowing = true
 			}
-			y++
 		}
+
+		y++
 	}
 
 	// We don't want the item text to get out of view. If the horizontal offset
