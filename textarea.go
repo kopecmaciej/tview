@@ -1170,11 +1170,16 @@ func (t *TextArea) Draw(screen tcell.Screen) {
 		printWithStyle(screen, t.label, x, y, 0, labelWidth, AlignLeft, t.labelStyle, labelBg == tcell.ColorDefault)
 		x += labelWidth
 		width -= labelWidth
+
 	} else {
 		_, _, drawnWidth := printWithStyle(screen, t.label, x, y, 0, width, AlignLeft, t.labelStyle, labelBg == tcell.ColorDefault)
 		x += drawnWidth
 		width -= drawnWidth
 	}
+
+	// Draw { } after label and at end of input field
+	screen.SetContent(x+t.labelWidth, y, '{', nil, tcell.Style{}.Foreground(tcell.ColorYellow))
+	screen.SetContent(x+width-1, y, '}', nil, tcell.Style{}.Foreground(tcell.ColorYellow))
 
 	// What's the space for the input element?
 	if t.width > 0 && t.width < width {
@@ -1211,7 +1216,7 @@ func (t *TextArea) Draw(screen tcell.Screen) {
 			if row >= 0 &&
 				row-t.rowOffset >= 0 && row-t.rowOffset < height &&
 				column-columnOffset >= 0 && column-columnOffset < width {
-				screen.ShowCursor(x+column-columnOffset, y+row-t.rowOffset)
+				screen.ShowCursor(x+column-columnOffset+2, y+row-t.rowOffset)
 			} else {
 				screen.HideCursor()
 			}
@@ -1234,7 +1239,7 @@ func (t *TextArea) Draw(screen tcell.Screen) {
 	if t.lastWidth != width && t.lineStarts != nil {
 		t.reset()
 	}
-	t.lastHeight, t.lastWidth = height, width
+	t.lastHeight, t.lastWidth = height, width - 4
 	t.extendLines(width, t.rowOffset+height)
 	if len(t.lineStarts) <= t.rowOffset {
 		return // It's scrolled out of view.
@@ -1257,7 +1262,7 @@ func (t *TextArea) Draw(screen tcell.Screen) {
 	line := t.rowOffset
 	pos := t.lineStarts[line]
 	endPos := pos
-	posX, posY := 0, 0
+	posX, posY := 2, 0
 	for pos[0] != 1 {
 		var clusterWidth int
 		cluster, text, _, clusterWidth, pos, endPos = t.step(text, pos, endPos)

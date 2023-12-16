@@ -11,7 +11,6 @@ import (
 
 const (
 	AutocompletedNavigate = iota // The user navigated the autocomplete list (using the errow keys).
-	AutocompletedTab             // The user selected an autocomplete entry using the tab key.
 	AutocompletedEnter           // The user selected an autocomplete entry using the enter key.
 	AutocompletedClick           // The user selected an autocomplete entry by clicking the mouse button on it.
 )
@@ -78,6 +77,9 @@ type InputField struct {
 	// The screen width of the input area. A value of 0 means extend as much as
 	// possible.
 	fieldWidth int
+
+	// The current cursor position within the text.
+	cursorPosition int
 
 	// An optional autocomplete function which receives the current text of the
 	// input field and returns a slice of strings to be displayed in a drop-down
@@ -460,6 +462,7 @@ func (i *InputField) Draw(screen tcell.Screen) {
 	if fieldWidth == 0 {
 		fieldWidth = width - labelWidth
 	}
+
 	i.textArea.SetRect(x, y, labelWidth+fieldWidth, 1)
 	i.textArea.setMinCursorPadding(fieldWidth-1, 1)
 
@@ -495,6 +498,7 @@ func (i *InputField) Draw(screen tcell.Screen) {
 		if ly+lheight >= sheight {
 			lheight = sheight - ly
 		}
+    // TODO: Follow the cursor
 		i.autocompleteList.SetRect(lx, ly, lwidth, lheight)
 		i.autocompleteList.Draw(screen)
 	}
@@ -533,14 +537,11 @@ func (i *InputField) InputHandler() func(event *tcell.EventKey, setFocus func(p 
 			case tcell.KeyEscape: // Close the list.
 				i.autocompleteList = nil
 				return
-			case tcell.KeyEnter, tcell.KeyTab: // Intentional selection.
+			case tcell.KeyEnter: // Intentional selection.
 				index := i.autocompleteList.GetCurrentItem()
 				text, _ := i.autocompleteList.GetItemText(index)
 				if i.autocompleted != nil {
 					source := AutocompletedEnter
-					if key == tcell.KeyTab {
-						source = AutocompletedTab
-					}
 					if i.autocompleted(stripTags(text), index, source) {
 						i.autocompleteList = nil
 						currentText = i.GetText()
@@ -551,7 +552,7 @@ func (i *InputField) InputHandler() func(event *tcell.EventKey, setFocus func(p 
 					i.autocompleteList = nil
 				}
 				return
-			case tcell.KeyDown, tcell.KeyUp, tcell.KeyPgDn, tcell.KeyPgUp:
+			case tcell.KeyDown, tcell.KeyUp, tcell.KeyTab, tcell.KeyBacktab:
 				i.autocompleteList.SetChangedFunc(func(index int, text, secondaryText string, shortcut rune) {
 					text = stripTags(text)
 					if i.autocompleted != nil {
