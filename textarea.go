@@ -89,6 +89,13 @@ type textAreaUndoItem struct {
 	continuation                  bool   // If true, this item is a continuation of the previous undo item. It is handled together with all other undo items in the same continuation sequence.
 }
 
+// textSurroundings represents text that will be added to the beginning and end
+// of the text area and will move with the text when it is edited.
+type textSurroundings struct {
+	prefix, suffix string
+	offset         int
+}
+
 // TextArea implements a simple text editor for multi-line text. Multi-color
 // text is not supported. Word-wrapping is enabled by default but can be turned
 // off or be changed to character-wrapping.
@@ -228,6 +235,9 @@ type TextArea struct {
 	// The text area's text prior to any editing. It is referenced by spans with
 	// a negative length.
 	initialText string
+
+	// text that will be added to the beginning and end of the text area
+	textSurroudings textSurroundings
 
 	// Any text that's been added by the user at some point. We only ever append
 	// to this buffer. It is referenced by spans with a positive length.
@@ -454,6 +464,16 @@ func (t *TextArea) GetText() string {
 	}
 
 	return text.String()
+}
+
+// SetTextSurroudings sets the text that will be added to the beginning and end
+// of the text area and will move with the text when it is edited. This is
+// useful for adding a prefix or suffix to the text area that is not part of the
+// text itself.
+func (t *TextArea) SetTextSurroudings(prefix, suffix string, offset int) {
+	t.textSurroudings.prefix = prefix
+	t.textSurroudings.suffix = suffix
+	t.textSurroudings.offset = offset
 }
 
 // getTextBeforeCursor returns the text of the text area up until the cursor.
@@ -1177,9 +1197,18 @@ func (t *TextArea) Draw(screen tcell.Screen) {
 		width -= drawnWidth
 	}
 
-	// Draw { } after label and at end of input field
-	screen.SetContent(x+t.labelWidth, y, '{', nil, tcell.Style{}.Foreground(tcell.ColorYellow))
-	screen.SetContent(x+width-1, y, '}', nil, tcell.Style{}.Foreground(tcell.ColorYellow))
+	if t.textSurroudings.offset < 0 {
+		t.textSurroudings.offset = 1
+	}
+	if t.textSurroudings.prefix != "" {
+		printWithStyle(screen, t.textSurroudings.prefix, x, y, 0, 1, AlignLeft, t.textStyle, false)
+		x = x + t.textSurroudings.offset
+		width = width - t.textSurroudings.offset
+	}
+	if t.textSurroudings.suffix != "" {
+		printWithStyle(screen, t.textSurroudings.suffix, x+width-1, y, 0, 1, AlignLeft, t.textStyle, false)
+		width = width - t.textSurroudings.offset - 1
+	}
 
 	// What's the space for the input element?
 	if t.width > 0 && t.width < width {
@@ -1216,7 +1245,7 @@ func (t *TextArea) Draw(screen tcell.Screen) {
 			if row >= 0 &&
 				row-t.rowOffset >= 0 && row-t.rowOffset < height &&
 				column-columnOffset >= 0 && column-columnOffset < width {
-				screen.ShowCursor(x+column-columnOffset+2, y+row-t.rowOffset)
+				screen.ShowCursor(x+column-columnOffset, y+row-t.rowOffset)
 			} else {
 				screen.HideCursor()
 			}
@@ -1239,7 +1268,7 @@ func (t *TextArea) Draw(screen tcell.Screen) {
 	if t.lastWidth != width && t.lineStarts != nil {
 		t.reset()
 	}
-	t.lastHeight, t.lastWidth = height, width - 4
+	t.lastHeight, t.lastWidth = height, width
 	t.extendLines(width, t.rowOffset+height)
 	if len(t.lineStarts) <= t.rowOffset {
 		return // It's scrolled out of view.
@@ -1262,7 +1291,7 @@ func (t *TextArea) Draw(screen tcell.Screen) {
 	line := t.rowOffset
 	pos := t.lineStarts[line]
 	endPos := pos
-	posX, posY := 2, 0
+	posX, posY := 0, 0
 	for pos[0] != 1 {
 		var clusterWidth int
 		cluster, text, _, clusterWidth, pos, endPos = t.step(text, pos, endPos)
@@ -2151,6 +2180,7 @@ func (t *TextArea) InputHandler() func(event *tcell.EventKey, setFocus func(p Pr
 				t.truncateLines(row - 1)
 				t.findCursor(true, row)
 				t.selectionStart = t.cursor
+				// add } to the end of the text
 			}
 		case tcell.KeyBackspace, tcell.KeyBackspace2: // Delete backwards. tcell.KeyBackspace is the same as tcell.CtrlH.
 			from, to, row := t.getSelection()
