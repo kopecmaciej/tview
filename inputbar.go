@@ -117,7 +117,7 @@ func (e *InputBar) GetCursor() (int, int, int, int) {
 	return e.textArea.GetCursor()
 }
 
-// check if list is on the screen
+// Check if list is on the screen
 func (e *InputBar) IsAutocompleteVisible() bool {
 	return e.autocompleteList.GetItemCount() > 0
 }

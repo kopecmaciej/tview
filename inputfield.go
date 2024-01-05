@@ -148,6 +148,37 @@ func (i *InputField) SetText(text string) *InputField {
 	return i
 }
 
+func (i *InputField) GetWordUnderCursor() string {
+	// get text before cursor and split by space or tab
+	textBefore := i.textArea.getTextBeforeCursor()
+  // if last char is space, return empty string
+  if len(textBefore) == 0 || textBefore[len(textBefore)-1] == ' ' {
+    return ""
+  }
+	words := strings.Fields(textBefore)
+	if len(words) == 0 {
+		return ""
+	}
+	return words[len(words)-1]
+}
+
+func (i *InputField) SetWordAtCursor(word string) *InputField {
+	// text after cursor
+	textAfter := i.textArea.getTextAfterCursor()
+	// text before cursor
+	textBefore := i.textArea.getTextBeforeCursor()
+	// add word in between
+	textBefore = textBefore[:len(textBefore)-len(i.GetWordUnderCursor())] + word
+	// set text
+	i.textArea.SetText(textBefore+textAfter, false)
+	// set cursor position after the new word
+  i.textArea.moveCursor(0, len(textBefore))
+  i.textArea.selectionStart = i.textArea.cursor
+
+
+	return i
+}
+
 // GetText returns the current text of the input field.
 func (i *InputField) GetText() string {
 	return i.textArea.GetText()
@@ -379,6 +410,11 @@ func (i *InputField) Autocomplete() *InputField {
 	return i
 }
 
+func (i *InputField) SetTextSurroudings(left, right string, offset int) *InputField {
+	i.textArea.SetTextSurroudings(left, right, offset)
+	return i
+}
+
 // SetAcceptanceFunc sets a handler which may reject the last character that was
 // entered, by returning false. The handler receives the text as it would be
 // after the change and the last character entered. If the handler is nil, all
@@ -443,6 +479,12 @@ func (i *InputField) Blur() {
 	i.autocompleteList = nil // Hide the autocomplete drop-down.
 }
 
+// GetCursor returns the absolute cursor position.
+func (i *InputField) GetCursor() (x int, y int) {
+	_, _, x, y = i.textArea.GetCursor()
+	return
+}
+
 // Draw draws this primitive onto the screen.
 func (i *InputField) Draw(screen tcell.Screen) {
 	i.Box.DrawForSubclass(screen, i)
@@ -486,8 +528,8 @@ func (i *InputField) Draw(screen tcell.Screen) {
 		}
 
 		// We prefer to drop down but if there is no space, maybe drop up?
-		lx := x + labelWidth
-		ly := y + 1
+		lx := x + labelWidth + i.textArea.cursor.column
+		ly := y + 2
 		_, sheight := screen.Size()
 		if ly+lheight >= sheight && ly-2 > lheight-ly {
 			ly = y - lheight
@@ -498,7 +540,7 @@ func (i *InputField) Draw(screen tcell.Screen) {
 		if ly+lheight >= sheight {
 			lheight = sheight - ly
 		}
-    // TODO: Follow the cursor
+		// TODO: Follow the cursor
 		i.autocompleteList.SetRect(lx, ly, lwidth, lheight)
 		i.autocompleteList.Draw(screen)
 	}
