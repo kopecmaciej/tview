@@ -1,6 +1,7 @@
 package tview
 
 import (
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -148,13 +149,12 @@ func (i *InputField) SetText(text string) *InputField {
 	return i
 }
 
+// GetWordUnderCursor returns the word under the cursor.
 func (i *InputField) GetWordUnderCursor() string {
-	// get text before cursor and split by space or tab
 	textBefore := i.textArea.getTextBeforeCursor()
-  // if last char is space, return empty string
-  if len(textBefore) == 0 || textBefore[len(textBefore)-1] == ' ' {
-    return ""
-  }
+	if len(textBefore) == 0 || textBefore[len(textBefore)-1] == ' ' {
+		return ""
+	}
 	words := strings.Fields(textBefore)
 	if len(words) == 0 {
 		return ""
@@ -162,19 +162,33 @@ func (i *InputField) GetWordUnderCursor() string {
 	return words[len(words)-1]
 }
 
+// SetWordAtCursor sets the word under the cursor to the given word.
+// If we have <$0>, <$1>, etc. the cursor will be placed between the < and the >
+// and the marker will be removed.
 func (i *InputField) SetWordAtCursor(word string) *InputField {
-	// text after cursor
 	textAfter := i.textArea.getTextAfterCursor()
-	// text before cursor
 	textBefore := i.textArea.getTextBeforeCursor()
-	// add word in between
-	textBefore = textBefore[:len(textBefore)-len(i.GetWordUnderCursor())] + word
-	// set text
-	i.textArea.SetText(textBefore+textAfter, false)
-	// set cursor position after the new word
-  i.textArea.moveCursor(0, len(textBefore))
-  i.textArea.selectionStart = i.textArea.cursor
 
+	// if we typed couple of characters and then pressed tab, we need to remove
+	// the last word from the textBefore
+	textBefore = strings.TrimSuffix(textBefore, i.GetWordUnderCursor())
+	cursorAtCol := len(textBefore) + len(word)
+
+	re := regexp.MustCompile(`\<\$[0-9]+\>`)
+	if re.MatchString(word) {
+		startIndex := strings.Index(word, "<$")
+		endIndex := strings.Index(word, ">")
+
+		word = word[:startIndex] + word[endIndex+1:]
+		cursorAtCol = len(textBefore) + startIndex
+	}
+
+	textBefore = textBefore + word
+	i.textArea.SetText(textBefore+textAfter, false)
+
+	// TODO: To consider - by using keyword, move the cursor between <$0>, <$1>, etc.
+	i.textArea.moveCursor(0, cursorAtCol)
+	i.textArea.selectionStart = i.textArea.cursor
 
 	return i
 }
