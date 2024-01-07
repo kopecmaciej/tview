@@ -1,6 +1,7 @@
 package tview
 
 import (
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -11,7 +12,6 @@ import (
 
 const (
 	AutocompletedNavigate = iota // The user navigated the autocomplete list (using the errow keys).
-	AutocompletedTab             // The user selected an autocomplete entry using the tab key.
 	AutocompletedEnter           // The user selected an autocomplete entry using the enter key.
 	AutocompletedClick           // The user selected an autocomplete entry by clicking the mouse button on it.
 )
@@ -143,6 +143,50 @@ func NewInputField() *InputField {
 // user. Calling this function will also trigger a "changed" event.
 func (i *InputField) SetText(text string) *InputField {
 	i.textArea.Replace(0, i.textArea.GetTextLength(), text)
+	return i
+}
+
+// GetWordUnderCursor returns the word under the cursor.
+func (i *InputField) GetWordUnderCursor() string {
+	textBefore := i.textArea.getTextBeforeCursor()
+	if len(textBefore) == 0 || textBefore[len(textBefore)-1] == ' ' {
+		return ""
+	}
+	words := strings.Fields(textBefore)
+	if len(words) == 0 {
+		return ""
+	}
+	return words[len(words)-1]
+}
+
+// SetWordAtCursor sets the word under the cursor to the given word.
+// If we have <$0>, <$1>, etc. the cursor will be placed between the < and the >
+// and the marker will be removed.
+func (i *InputField) SetWordAtCursor(word string) *InputField {
+	textAfter := i.textArea.getTextAfterCursor()
+	textBefore := i.textArea.getTextBeforeCursor()
+
+	// if we typed couple of characters and then pressed tab, we need to remove
+	// the last word from the textBefore
+	textBefore = strings.TrimSuffix(textBefore, i.GetWordUnderCursor())
+	cursorAtCol := len(textBefore) + len(word)
+
+	re := regexp.MustCompile(`\<\$[0-9]+\>`)
+	if re.MatchString(word) {
+		startIndex := strings.Index(word, "<$")
+		endIndex := strings.Index(word, ">")
+
+		word = word[:startIndex] + word[endIndex+1:]
+		cursorAtCol = len(textBefore) + startIndex
+	}
+
+	textBefore = textBefore + word
+	i.textArea.SetText(textBefore+textAfter, false)
+
+	// TODO: To consider - by using keyword, move the cursor between <$0>, <$1>, etc.
+	i.textArea.moveCursor(0, cursorAtCol)
+	i.textArea.selectionStart = i.textArea.cursor
+
 	return i
 }
 
@@ -377,6 +421,11 @@ func (i *InputField) Autocomplete() *InputField {
 	return i
 }
 
+func (i *InputField) SetTextSurroudings(left, right string, offset int) *InputField {
+	i.textArea.SetTextSurroudings(left, right, offset)
+	return i
+}
+
 // SetAcceptanceFunc sets a handler which may reject the last character that was
 // entered, by returning false. The handler receives the text as it would be
 // after the change and the last character entered. If the handler is nil, all
@@ -460,6 +509,7 @@ func (i *InputField) Draw(screen tcell.Screen) {
 	if fieldWidth == 0 {
 		fieldWidth = width - labelWidth
 	}
+
 	i.textArea.SetRect(x, y, labelWidth+fieldWidth, 1)
 	i.textArea.setMinCursorPadding(fieldWidth-1, 1)
 
@@ -483,8 +533,8 @@ func (i *InputField) Draw(screen tcell.Screen) {
 		}
 
 		// We prefer to drop down but if there is no space, maybe drop up?
-		lx := x + labelWidth
-		ly := y + 1
+		lx := x + labelWidth + i.textArea.cursor.column
+		ly := y + 2
 		_, sheight := screen.Size()
 		if ly+lheight >= sheight && ly-2 > lheight-ly {
 			ly = y - lheight
@@ -533,14 +583,11 @@ func (i *InputField) InputHandler() func(event *tcell.EventKey, setFocus func(p 
 			case tcell.KeyEscape: // Close the list.
 				i.autocompleteList = nil
 				return
-			case tcell.KeyEnter, tcell.KeyTab: // Intentional selection.
+			case tcell.KeyEnter: // Intentional selection.
 				index := i.autocompleteList.GetCurrentItem()
 				text, _ := i.autocompleteList.GetItemText(index)
 				if i.autocompleted != nil {
 					source := AutocompletedEnter
-					if key == tcell.KeyTab {
-						source = AutocompletedTab
-					}
 					if i.autocompleted(stripTags(text), index, source) {
 						i.autocompleteList = nil
 						currentText = i.GetText()
@@ -551,7 +598,7 @@ func (i *InputField) InputHandler() func(event *tcell.EventKey, setFocus func(p 
 					i.autocompleteList = nil
 				}
 				return
-			case tcell.KeyDown, tcell.KeyUp, tcell.KeyPgDn, tcell.KeyPgUp:
+			case tcell.KeyDown, tcell.KeyUp, tcell.KeyTab, tcell.KeyBacktab:
 				i.autocompleteList.SetChangedFunc(func(index int, text, secondaryText string, shortcut rune) {
 					text = stripTags(text)
 					if i.autocompleted != nil {
