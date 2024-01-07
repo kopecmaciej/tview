@@ -79,9 +79,6 @@ type InputField struct {
 	// possible.
 	fieldWidth int
 
-	// The current cursor position within the text.
-	cursorPosition int
-
 	// An optional autocomplete function which receives the current text of the
 	// input field and returns a slice of strings to be displayed in a drop-down
 	// selection.
@@ -493,12 +490,6 @@ func (i *InputField) Blur() {
 	i.autocompleteList = nil // Hide the autocomplete drop-down.
 }
 
-// GetCursor returns the absolute cursor position.
-func (i *InputField) GetCursor() (x int, y int) {
-	_, _, x, y = i.textArea.GetCursor()
-	return
-}
-
 // Draw draws this primitive onto the screen.
 func (i *InputField) Draw(screen tcell.Screen) {
 	i.Box.DrawForSubclass(screen, i)
@@ -554,7 +545,6 @@ func (i *InputField) Draw(screen tcell.Screen) {
 		if ly+lheight >= sheight {
 			lheight = sheight - ly
 		}
-		// TODO: Follow the cursor
 		i.autocompleteList.SetRect(lx, ly, lwidth, lheight)
 		i.autocompleteList.Draw(screen)
 	}

@@ -2180,7 +2180,6 @@ func (t *TextArea) InputHandler() func(event *tcell.EventKey, setFocus func(p Pr
 				t.truncateLines(row - 1)
 				t.findCursor(true, row)
 				t.selectionStart = t.cursor
-				// add } to the end of the text
 			}
 		case tcell.KeyBackspace, tcell.KeyBackspace2: // Delete backwards. tcell.KeyBackspace is the same as tcell.CtrlH.
 			from, to, row := t.getSelection()

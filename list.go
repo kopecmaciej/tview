@@ -559,9 +559,9 @@ func (l *List) Draw(screen tcell.Screen) {
 
 		// Secondary text.
 		if l.showSecondaryText {
-      sX := x
+			sX := x
 			if l.inlined {
-        sX = x + TaggedStringWidth(item.MainText) + 1
+				sX = x + TaggedStringWidth(item.MainText) + 1
 			} else {
 				y++
 			}
