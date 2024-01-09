@@ -421,11 +421,6 @@ func (i *InputField) Autocomplete() *InputField {
 	return i
 }
 
-func (i *InputField) SetTextSurroudings(left, right string, offset int) *InputField {
-	i.textArea.SetTextSurroudings(left, right, offset)
-	return i
-}
-
 // SetAcceptanceFunc sets a handler which may reject the last character that was
 // entered, by returning false. The handler receives the text as it would be
 // after the change and the last character entered. If the handler is nil, all
