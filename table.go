@@ -1470,7 +1470,6 @@ func (t *Table) InputHandler() func(event *tcell.EventKey, setFocus func(p Primi
 
 			down = func() {
 				if t.rowsSelectable {
-					row, column := t.selectedRow, t.selectedColumn
 					t.selectedRow++
 					if t.selectedRow >= rowCount {
 						if t.wrapVertically {
@@ -1479,6 +1478,7 @@ func (t *Table) InputHandler() func(event *tcell.EventKey, setFocus func(p Primi
 							t.selectedRow = rowCount - 1
 						}
 					}
+					row, column := t.selectedRow, t.selectedColumn
 					finalRow, finalColumn := rowCount-1, lastColumn
 					if t.wrapVertically {
 						finalRow = row
@@ -1495,7 +1495,6 @@ func (t *Table) InputHandler() func(event *tcell.EventKey, setFocus func(p Primi
 
 			up = func() {
 				if t.rowsSelectable {
-					row, column := t.selectedRow, t.selectedColumn
 					t.selectedRow--
 					if t.selectedRow < 0 {
 						if t.wrapVertically {
@@ -1504,6 +1503,7 @@ func (t *Table) InputHandler() func(event *tcell.EventKey, setFocus func(p Primi
 							t.selectedRow = 0
 						}
 					}
+					row, column := t.selectedRow, t.selectedColumn
 					finalRow, finalColumn := 0, 0
 					if t.wrapVertically {
 						finalRow = row
