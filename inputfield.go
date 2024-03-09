@@ -47,6 +47,11 @@ var (
 	}
 )
 
+type AutocompleteItem struct {
+	Main      string
+	Secondary string
+}
+
 // InputField is a one-line box into which the user can enter text. Use
 // [InputField.SetAcceptanceFunc] to accept or reject input,
 // [InputField.SetChangedFunc] to listen for changes, and
@@ -82,7 +87,7 @@ type InputField struct {
 	// An optional autocomplete function which receives the current text of the
 	// input field and returns a slice of strings to be displayed in a drop-down
 	// selection.
-	autocomplete func(text string) []string
+	autocomplete func(text string) []AutocompleteItem
 
 	// The List object which shows the selectable autocomplete entries. If not
 	// nil, the list's main texts represent the current autocomplete entries.
@@ -91,9 +96,11 @@ type InputField struct {
 
 	// The styles of the autocomplete entries.
 	autocompleteStyles struct {
-		main       tcell.Style
-		selected   tcell.Style
-		background tcell.Color
+		main              tcell.Style
+		selected          tcell.Style
+		background        tcell.Color
+		secondary         tcell.Style
+		showSecondaryText bool
 	}
 
 	// An optional function which is called when the user selects an
@@ -146,8 +153,8 @@ func (i *InputField) SetText(text string) *InputField {
 	return i
 }
 
-// GetWordUnderCursor returns the word under the cursor.
-func (i *InputField) GetWordUnderCursor() string {
+// GetWordAtCursor returns the word under the cursor.
+func (i *InputField) GetWordAtCursor() string {
 	textBefore := i.textArea.getTextBeforeCursor()
 	if len(textBefore) == 0 || textBefore[len(textBefore)-1] == ' ' {
 		return ""
@@ -156,6 +163,7 @@ func (i *InputField) GetWordUnderCursor() string {
 	if len(words) == 0 {
 		return ""
 	}
+
 	return words[len(words)-1]
 }
 
@@ -165,10 +173,20 @@ func (i *InputField) GetWordUnderCursor() string {
 func (i *InputField) SetWordAtCursor(word string) *InputField {
 	textAfter := i.textArea.getTextAfterCursor()
 	textBefore := i.textArea.getTextBeforeCursor()
+	wordAtCursor := i.GetWordAtCursor()
+
+	bracketLastIndex := strings.LastIndex(wordAtCursor, "[")
+	if bracketLastIndex == -1 {
+		bracketLastIndex = strings.LastIndex(wordAtCursor, "{")
+	}
+	if bracketLastIndex > -1 {
+		bracketLastIndex++
+		word = wordAtCursor[0:bracketLastIndex] + word
+	}
 
 	// if we typed couple of characters and then pressed tab, we need to remove
 	// the last word from the textBefore
-	textBefore = strings.TrimSuffix(textBefore, i.GetWordUnderCursor())
+	textBefore = strings.TrimSuffix(textBefore, wordAtCursor)
 	cursorAtCol := len(textBefore) + len(word)
 
 	re := regexp.MustCompile(`\<\$[0-9]+\>`)
@@ -283,10 +301,12 @@ func (i *InputField) GetPlaceholderStyle() tcell.Style {
 // SetAutocompleteStyles sets the colors and style of the autocomplete entries.
 // For details, see List.SetMainTextStyle(), List.SetSelectedStyle(), and
 // Box.SetBackgroundColor().
-func (i *InputField) SetAutocompleteStyles(background tcell.Color, main, selected tcell.Style) *InputField {
+func (i *InputField) SetAutocompleteStyles(background tcell.Color, main, selected, secondary tcell.Style, showSecondaryText bool) *InputField {
 	i.autocompleteStyles.background = background
 	i.autocompleteStyles.main = main
 	i.autocompleteStyles.selected = selected
+	i.autocompleteStyles.secondary = secondary
+	i.autocompleteStyles.showSecondaryText = showSecondaryText
 	return i
 }
 
@@ -343,7 +363,7 @@ func (i *InputField) SetMaskCharacter(mask rune) *InputField {
 // invoked in this function and whenever the current text changes or when
 // [InputField.Autocomplete] is called. Entries are cleared when the user
 // selects an entry or presses Escape.
-func (i *InputField) SetAutocompleteFunc(callback func(currentText string) (entries []string)) *InputField {
+func (i *InputField) SetAutocompleteFunc(callback func(currentText string) (entries []AutocompleteItem)) *InputField {
 	i.autocomplete = callback
 	i.Autocomplete()
 	return i
@@ -393,12 +413,18 @@ func (i *InputField) Autocomplete() *InputField {
 
 	// Make a list if we have none.
 	if i.autocompleteList == nil {
+		style := i.autocompleteStyles
 		i.autocompleteList = NewList()
-		i.autocompleteList.ShowSecondaryText(false).
-			SetMainTextStyle(i.autocompleteStyles.main).
-			SetSelectedStyle(i.autocompleteStyles.selected).
+		i.autocompleteList.ShowSecondaryText(style.showSecondaryText).
+			SetMainTextStyle(style.main).
+			SetSelectedStyle(style.selected).
 			SetHighlightFullLine(true).
-			SetBackgroundColor(i.autocompleteStyles.background)
+			SetBackgroundColor(style.background)
+
+		if i.autocompleteList.showSecondaryText {
+			i.autocompleteList.SetSecondaryTextStyle(style.secondary)
+			i.autocompleteList.SetInlined(true)
+		}
 	}
 
 	// Fill it with the entries.
@@ -406,10 +432,11 @@ func (i *InputField) Autocomplete() *InputField {
 	suffixLength := 9999 // I'm just waiting for the day somebody opens an issue with this number being too small.
 	i.autocompleteList.Clear()
 	for index, entry := range entries {
-		i.autocompleteList.AddItem(entry, "", 0, nil)
-		if strings.HasPrefix(entry, text) && len(entry)-len(text) < suffixLength {
+		main, secondary := entry.Main, entry.Secondary
+		i.autocompleteList.AddItem(main, secondary, 0, nil)
+		if strings.HasPrefix(main, text) && len(main)-len(text) < suffixLength {
 			currentEntry = index
-			suffixLength = len(text) - len(entry)
+			suffixLength = len(text) - len(main)
 		}
 	}
 

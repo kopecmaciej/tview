@@ -94,6 +94,9 @@ type List struct {
 
 	// An optional function which is called when the user presses the Escape key.
 	done func()
+
+	// Whether or not to wrap text
+	wrapText bool
 }
 
 // NewList returns a new list.
@@ -209,6 +212,12 @@ func (l *List) RemoveItem(index int) *List {
 		l.changed(l.currentItem, item.MainText, item.SecondaryText, item.Shortcut)
 	}
 
+	return l
+}
+
+// SetWrapText sets the flag that determines whether text is wrapped or not
+func (l *List) SetWrapText(wrap bool) *List {
+	l.wrapText = wrap
 	return l
 }
 
@@ -491,6 +500,7 @@ func (l *List) Draw(screen tcell.Screen) {
 
 	// Do we show any shortcuts?
 	var showShortcuts bool
+
 	for _, item := range l.items {
 		if item.Shortcut != 0 {
 			showShortcuts = true
@@ -524,7 +534,7 @@ func (l *List) Draw(screen tcell.Screen) {
 		}
 
 		// Main text.
-		_, end, printedWidth := printWithStyle(screen, item.MainText, x, y, l.horizontalOffset, width, AlignLeft, l.mainTextStyle, true)
+		_, end, printedWidth := printWithStyle(screen, item.MainText, x, y, l.horizontalOffset, width, AlignLeft, l.mainTextStyle, false)
 		if printedWidth > maxWidth {
 			maxWidth = printedWidth
 		}
@@ -560,17 +570,35 @@ func (l *List) Draw(screen tcell.Screen) {
 		// Secondary text.
 		if l.showSecondaryText {
 			sX := x
+      maxWidth = width
 			if l.inlined {
-				sX = x + TaggedStringWidth(item.MainText) + 1
+				sX = x + TaggedStringWidth(item.MainText)
+				maxWidth += TaggedStringWidth(item.SecondaryText) + 1
 			} else {
+				maxWidth -= 5
 				y++
 			}
-			_, end, printedWidth := printWithStyle(screen, item.SecondaryText, sX, y, l.horizontalOffset, width, AlignLeft, l.secondaryTextStyle, true)
-			if printedWidth > maxWidth {
-				maxWidth = printedWidth
-			}
-			if end < len(item.SecondaryText) {
-				overflowing = true
+			if l.wrapText {
+				secondaryText := item.SecondaryText
+				for len(secondaryText) > 0 {
+					_, end, printedWidth := printWithStyle(screen, secondaryText, sX, y, l.horizontalOffset, maxWidth, AlignLeft, l.secondaryTextStyle, false)
+					if printedWidth > maxWidth {
+						maxWidth = printedWidth
+					}
+					if end < len(secondaryText) {
+						overflowing = true
+					}
+					secondaryText = secondaryText[end:]
+					y++
+				}
+			} else {
+				_, end, printedWidth := printWithStyle(screen, " "+item.SecondaryText, sX, y, l.horizontalOffset, maxWidth, AlignLeft, l.secondaryTextStyle, false)
+				if printedWidth > maxWidth {
+					maxWidth = printedWidth
+				}
+				if end < len(item.SecondaryText) {
+					overflowing = true
+				}
 			}
 		}
 
@@ -655,6 +683,7 @@ func (l *List) InputHandler() func(event *tcell.EventKey, setFocus func(p Primit
 				l.currentItem = 0
 			}
 		case tcell.KeyEnter:
+			// if space or enter is pressed, call the selected function
 			if l.currentItem >= 0 && l.currentItem < len(l.items) {
 				item := l.items[l.currentItem]
 				if item.Selected != nil {
@@ -666,6 +695,15 @@ func (l *List) InputHandler() func(event *tcell.EventKey, setFocus func(p Primit
 			}
 		case tcell.KeyRune:
 			ch := event.Rune()
+			if ch == 'j' {
+				l.currentItem++
+			} else if ch == 'k' {
+				l.currentItem--
+			} else if ch == 'g' {
+				l.currentItem = 0
+			} else if ch == 'G' {
+				l.currentItem = len(l.items) - 1
+			}
 			if ch != ' ' {
 				// It's not a space bar. Is it a shortcut?
 				var found bool

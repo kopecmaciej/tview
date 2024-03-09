@@ -455,6 +455,9 @@ type Table struct {
 	// The currently selected row and column.
 	selectedRow, selectedColumn int
 
+	// multiple selected rows and columns
+	selectedRows, selectedColumns []int
+
 	// A temporary flag which causes the next call to Draw() to force the
 	// current selection to remain visible. It is set to false afterwards.
 	clampToSelection bool
@@ -619,6 +622,22 @@ func (t *Table) Select(row, column int) *Table {
 	return t
 }
 
+// MultipleSelect sets the selected cells to the given positions. Depending on
+// the selection settings specified via SetSelectable(), this may be an entire
+// row or column, or even ignored completely
+func (t *Table) MultipleSelect(rows, columns []int) *Table {
+	t.selectedRows, t.selectedColumns = rows, columns
+	t.clampToSelection = true
+	return t
+}
+
+// GetMultipleSelection returns the positions of the current selection.
+// If entire rows are selected, the column index is undefined.
+// Likewise for entire columns.
+func (t *Table) GetMultipleSelection() (rows, columns []int) {
+	return t.selectedRows, t.selectedColumns
+}
+
 // SetOffset sets how many rows and columns should be skipped when drawing the
 // table. This is useful for large tables that do not fit on the screen.
 // Navigating a selection can change these values.
@@ -709,6 +728,15 @@ func (t *Table) GetCell(row, column int) *TableCell {
 		cell = &TableCell{}
 	}
 	return cell
+}
+
+// GetCells returns given cells of the table.
+func (t *Table) GetCells(rows, columns []int) []*TableCell {
+	cells := make([]*TableCell, len(rows))
+	for index, row := range rows {
+		cells[index] = t.GetCell(row, columns[index])
+	}
+	return cells
 }
 
 // RemoveRow removes the row at the given position from the table. If there is
