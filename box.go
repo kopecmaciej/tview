@@ -365,9 +365,9 @@ func (b *Box) DrawForSubclass(screen tcell.Screen, p Primitive) {
 	// Draw border.
 	if b.border && b.width >= 2 && b.height >= 2 {
 		var vertical, horizontal, topLeft, topRight, bottomLeft, bottomRight rune
-    borderStyle := b.borderStyle
+		borderStyle := b.borderStyle
 		if p.HasFocus() {
-      borderStyle = b.focusStyle
+			borderStyle = b.focusStyle
 			horizontal = Borders.HorizontalFocus
 			vertical = Borders.VerticalFocus
 			topLeft = Borders.TopLeftFocus
