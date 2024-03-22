@@ -109,6 +109,16 @@ func (f *Flex) RemoveItem(p Primitive) *Flex {
 	return f
 }
 
+// HasItem returns true if the given primitive is part of this container.
+func (f *Flex) HasItem(p Primitive) bool {
+	for _, item := range f.items {
+		if item.Item == p {
+			return true
+		}
+	}
+	return false
+}
+
 // GetItemCount returns the number of items in this container.
 func (f *Flex) GetItemCount() int {
 	return len(f.items)
