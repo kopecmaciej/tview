@@ -124,6 +124,12 @@ func (m *Modal) AddButtons(labels []string) *Modal {
 				case tcell.KeyUp, tcell.KeyLeft:
 					return tcell.NewEventKey(tcell.KeyBacktab, 0, tcell.ModNone)
 				}
+				switch event.Rune() {
+				case 'h':
+					return tcell.NewEventKey(tcell.KeyTab, 0, tcell.ModNone)
+				case 'l':
+					return tcell.NewEventKey(tcell.KeyBacktab, 0, tcell.ModNone)
+				}
 				return event
 			})
 		}(index, label)
