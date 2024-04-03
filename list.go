@@ -108,9 +108,9 @@ func NewList() *List {
 		Box:                NewBox(),
 		showSecondaryText:  true,
 		wrapAround:         true,
-		mainTextStyle:      tcell.StyleDefault.Foreground(Styles.PrimaryTextColor),
-		secondaryTextStyle: tcell.StyleDefault.Foreground(Styles.TertiaryTextColor),
-		shortcutStyle:      tcell.StyleDefault.Foreground(Styles.SecondaryTextColor),
+		mainTextStyle:      tcell.StyleDefault.Foreground(Styles.PrimaryTextColor).Background(Styles.PrimitiveBackgroundColor),
+		secondaryTextStyle: tcell.StyleDefault.Foreground(Styles.TertiaryTextColor).Background(Styles.PrimitiveBackgroundColor),
+		shortcutStyle:      tcell.StyleDefault.Foreground(Styles.SecondaryTextColor).Background(Styles.PrimitiveBackgroundColor),
 		selectedStyle:      tcell.StyleDefault.Foreground(Styles.PrimitiveBackgroundColor).Background(Styles.PrimaryTextColor),
 	}
 }
@@ -539,7 +539,7 @@ func (l *List) Draw(screen tcell.Screen) {
 
 		// Shortcuts.
 		if showShortcuts && item.Shortcut != 0 {
-			printWithStyle(screen, fmt.Sprintf("(%s)", string(item.Shortcut)), x-5, y, 0, 4, AlignRight, l.shortcutStyle, true)
+			printWithStyle(screen, fmt.Sprintf("(%s)", string(item.Shortcut)), x-5, y, 0, 4, AlignRight, l.shortcutStyle, false)
 		}
 
 		// Store the starting y position for this item
@@ -688,17 +688,9 @@ func (l *List) InputHandler() func(event *tcell.EventKey, setFocus func(p Primit
 		case tcell.KeyBacktab, tcell.KeyUp:
 			l.currentItem--
 		case tcell.KeyRight:
-			if l.overflowing {
-				l.horizontalOffset += 2 // We shift by 2 to account for two-cell characters.
-			} else {
-				l.currentItem++
-			}
+			l.horizontalOffset += 2 // We shift by 2 to account for two-cell characters.
 		case tcell.KeyLeft:
-			if l.horizontalOffset > 0 {
-				l.horizontalOffset -= 2
-			} else {
-				l.currentItem--
-			}
+			l.horizontalOffset -= 2
 		case tcell.KeyHome:
 			l.currentItem = 0
 		case tcell.KeyEnd:
@@ -847,6 +839,12 @@ func (l *List) MouseHandler() func(action MouseAction, event *tcell.EventMouse, 
 			if _, _, _, height := l.GetInnerRect(); lines > height {
 				l.itemOffset++
 			}
+			consumed = true
+		case MouseScrollLeft:
+			l.horizontalOffset--
+			consumed = true
+		case MouseScrollRight:
+			l.horizontalOffset++
 			consumed = true
 		}
 
