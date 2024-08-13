@@ -534,12 +534,28 @@ func (l *List) Draw(screen tcell.Screen) {
 		}
 
 		// Main text.
-		_, end, printedWidth := printWithStyle(screen, item.MainText, x, y, l.horizontalOffset, width, AlignLeft, l.mainTextStyle, false)
-		if printedWidth > maxWidth {
-			maxWidth = printedWidth
-		}
-		if end < len(item.MainText) {
-			overflowing = true
+		if l.wrapText {
+			mainText := item.MainText
+			for len(mainText) > 0 {
+				_, end, printedWidth := printWithStyle(screen, mainText, x, y, l.horizontalOffset, width, AlignLeft, l.mainTextStyle, false)
+				if printedWidth > maxWidth {
+					maxWidth = printedWidth
+				}
+				if end < len(mainText) {
+					overflowing = true
+				}
+				mainText = mainText[end:]
+				y++
+			}
+		} else {
+			_, end, printedWidth := printWithStyle(screen, item.MainText, x, y, l.horizontalOffset, width, AlignLeft, l.mainTextStyle, false)
+			if printedWidth > maxWidth {
+				maxWidth = printedWidth
+			}
+			if end < len(item.MainText) {
+				overflowing = true
+			}
+			y++
 		}
 
 		// Background color of selected text.
