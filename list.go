@@ -97,6 +97,9 @@ type List struct {
 
 	// Whether or not to wrap text
 	wrapText bool
+
+	// Gap between items
+	itemGap int
 }
 
 // NewList returns a new list.
@@ -486,6 +489,12 @@ func (l *List) SetInlined(inlined bool) *List {
 	return l
 }
 
+// SetItemGap sets the gap between list items.
+func (l *List) SetItemGap(gap int) *List {
+	l.itemGap = gap
+	return l
+}
+
 // Draw draws this primitive onto the screen.
 func (l *List) Draw(screen tcell.Screen) {
 	l.Box.DrawForSubclass(screen, l)
@@ -533,7 +542,11 @@ func (l *List) Draw(screen tcell.Screen) {
 			printWithStyle(screen, fmt.Sprintf("(%s)", string(item.Shortcut)), x-5, y, 0, 4, AlignRight, l.shortcutStyle, true)
 		}
 
+		// Store the starting y position for this item
+		itemStartY := y
+
 		// Main text.
+		mainTextEndY := y
 		if l.wrapText {
 			mainText := item.MainText
 			for len(mainText) > 0 {
@@ -547,6 +560,7 @@ func (l *List) Draw(screen tcell.Screen) {
 				mainText = mainText[end:]
 				y++
 			}
+			mainTextEndY = y
 		} else {
 			_, end, printedWidth := printWithStyle(screen, item.MainText, x, y, l.horizontalOffset, width, AlignLeft, l.mainTextStyle, false)
 			if printedWidth > maxWidth {
@@ -556,43 +570,39 @@ func (l *List) Draw(screen tcell.Screen) {
 				overflowing = true
 			}
 			y++
+			mainTextEndY = y
 		}
 
-		// Background color of selected text.
+		// Background color of selected text (only for main text).
 		if index == l.currentItem && (!l.selectedFocusOnly || l.HasFocus()) {
-			textWidth := width
-			if !l.highlightFullLine {
-				if w := TaggedStringWidth(item.MainText); w < textWidth {
-					textWidth = w
+			for by := itemStartY; by < mainTextEndY; by++ {
+				textWidth := width
+				if !l.highlightFullLine {
+					if w := TaggedStringWidth(item.MainText); w < textWidth {
+						textWidth = w
+					}
+				}
+
+				mainTextColor, _, _ := l.mainTextStyle.Decompose()
+				for bx := 0; bx < textWidth; bx++ {
+					m, c, style, _ := screen.GetContent(x+bx, by)
+					fg, _, _ := style.Decompose()
+					style = l.selectedStyle
+					if fg != mainTextColor {
+						style = style.Foreground(fg)
+					}
+					screen.SetContent(x+bx, by, m, c, style)
 				}
 			}
-
-			mainTextColor, _, _ := l.mainTextStyle.Decompose()
-			for bx := 0; bx < textWidth; bx++ {
-				m, c, style, _ := screen.GetContent(x+bx, y)
-				fg, _, _ := style.Decompose()
-				style = l.selectedStyle
-				if fg != mainTextColor {
-					style = style.Foreground(fg)
-				}
-				screen.SetContent(x+bx, y, m, c, style)
-			}
-		}
-
-		if y >= bottomLimit {
-			break
 		}
 
 		// Secondary text.
 		if l.showSecondaryText {
 			sX := x
-      maxWidth = width
+			maxWidth = width
 			if l.inlined {
 				sX = x + TaggedStringWidth(item.MainText)
 				maxWidth += TaggedStringWidth(item.SecondaryText) + 1
-			} else {
-				maxWidth -= 5
-				y++
 			}
 			if l.wrapText {
 				secondaryText := item.SecondaryText
@@ -615,10 +625,16 @@ func (l *List) Draw(screen tcell.Screen) {
 				if end < len(item.SecondaryText) {
 					overflowing = true
 				}
+				y++
 			}
 		}
 
-		y++
+		// Add the gap between items
+		y += l.itemGap
+
+		if y >= bottomLimit {
+			break
+		}
 	}
 
 	// We don't want the item text to get out of view. If the horizontal offset
@@ -638,16 +654,17 @@ func (l *List) adjustOffset() {
 	if height == 0 {
 		return
 	}
+
+	itemHeight := 1
+	if l.showSecondaryText {
+		itemHeight = 2
+	}
+	itemHeight += l.itemGap
+
 	if l.currentItem < l.itemOffset {
 		l.itemOffset = l.currentItem
-	} else if l.showSecondaryText {
-		if 2*(l.currentItem-l.itemOffset) >= height-1 {
-			l.itemOffset = (2*l.currentItem + 3 - height) / 2
-		}
-	} else {
-		if l.currentItem-l.itemOffset >= height {
-			l.itemOffset = l.currentItem + 1 - height
-		}
+	} else if (l.currentItem-l.itemOffset+1)*itemHeight > height {
+		l.itemOffset = l.currentItem - height/itemHeight + 1
 	}
 }
 
