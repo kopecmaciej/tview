@@ -455,8 +455,7 @@ type Table struct {
 	// The currently selected row and column.
 	selectedRow, selectedColumn int
 
-	// multiple selected rows and columns
-	selectedRows, selectedColumns []int
+	selectedRows map[int]bool
 
 	// A temporary flag which causes the next call to Draw() to force the
 	// current selection to remain visible. It is set to false afterwards.
@@ -501,6 +500,9 @@ type Table struct {
 	// An optional function which gets called when the user presses Escape, Tab,
 	// or Backtab. Also when the user presses Enter if nothing is selectable.
 	done func(key tcell.Key)
+
+	// up, down are function keys for moving the selection up and down
+	up, down func()
 }
 
 // NewTable returns a new table.
@@ -509,6 +511,7 @@ func NewTable() *Table {
 		Box:          NewBox(),
 		bordersColor: Styles.GraphicsColor,
 		separator:    ' ',
+		selectedRows: make(map[int]bool),
 	}
 	t.SetContent(nil)
 	return t
@@ -622,20 +625,29 @@ func (t *Table) Select(row, column int) *Table {
 	return t
 }
 
-// MultipleSelect sets the selected cells to the given positions. Depending on
-// the selection settings specified via SetSelectable(), this may be an entire
-// row or column, or even ignored completely
-func (t *Table) MultipleSelect(rows, columns []int) *Table {
-	t.selectedRows, t.selectedColumns = rows, columns
-	t.clampToSelection = true
-	return t
+// Add new methods for multi-row selection
+func (t *Table) ToggleRowSelection(row int) {
+	if t.selectedRows[row] {
+		delete(t.selectedRows, row)
+	} else {
+		t.selectedRows[row] = true
+	}
 }
 
-// GetMultipleSelection returns the positions of the current selection.
-// If entire rows are selected, the column index is undefined.
-// Likewise for entire columns.
-func (t *Table) GetMultipleSelection() (rows, columns []int) {
-	return t.selectedRows, t.selectedColumns
+func (t *Table) IsRowSelected(row int) bool {
+	return t.selectedRows[row]
+}
+
+func (t *Table) GetSelectedRows() []int {
+	rows := make([]int, 0, len(t.selectedRows))
+	for row := range t.selectedRows {
+		rows = append(rows, row)
+	}
+	return rows
+}
+
+func (t *Table) ClearSelection() {
+	t.selectedRows = make(map[int]bool)
 }
 
 // SetOffset sets how many rows and columns should be skipped when drawing the
@@ -842,6 +854,14 @@ func (t *Table) ScrollToEnd() *Table {
 	t.columnOffset = 0
 	t.rowOffset = t.content.GetRowCount()
 	return t
+}
+
+func (t *Table) MoveUp() {
+	t.up()
+}
+
+func (t *Table) MoveDown() {
+	t.down()
 }
 
 // SetWrapSelection determines whether a selection wraps vertically or
@@ -1282,7 +1302,7 @@ func (t *Table) Draw(screen tcell.Screen) {
 	var backgroundColors []tcell.Color
 	for rowY, row := range rows {
 		columnX := 0
-		rowSelected := t.rowsSelectable && !t.columnsSelectable && row == t.selectedRow
+		rowSelected := t.rowsSelectable && (t.selectedRows[row] || row == t.selectedRow)
 		for columnIndex, column := range columns {
 			columnWidth := widths[columnIndex]
 			cell := t.content.GetCell(row, column)
@@ -1615,6 +1635,9 @@ func (t *Table) InputHandler() func(event *tcell.EventKey, setFocus func(p Primi
 			}
 		)
 
+		t.down = down
+		t.up = up
+
 		switch key {
 		case tcell.KeyRune:
 			switch event.Rune() {
@@ -1630,6 +1653,8 @@ func (t *Table) InputHandler() func(event *tcell.EventKey, setFocus func(p Primi
 				left()
 			case 'l':
 				right()
+			case 'v':
+				t.ToggleRowSelection(t.selectedRow)
 			}
 		case tcell.KeyHome:
 			home()
@@ -1643,9 +1668,9 @@ func (t *Table) InputHandler() func(event *tcell.EventKey, setFocus func(p Primi
 			left()
 		case tcell.KeyRight:
 			right()
-		case tcell.KeyPgDn, tcell.KeyCtrlF:
+		case tcell.KeyPgDn, tcell.KeyCtrlD:
 			pageDown()
-		case tcell.KeyPgUp, tcell.KeyCtrlB:
+		case tcell.KeyPgUp, tcell.KeyCtrlU:
 			pageUp()
 		case tcell.KeyEnter:
 			if (t.rowsSelectable || t.columnsSelectable) && t.selected != nil {
