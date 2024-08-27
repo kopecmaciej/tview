@@ -347,6 +347,17 @@ func (i *InputField) SetDisabled(disabled bool) FormItem {
 	return i
 }
 
+// SetClipboard sets the clipboard text.
+func (i *InputField) SetClipboard(copyToClipboard func(string), pasteFromClipboard func() string) *InputField {
+	i.textArea.SetClipboard(copyToClipboard, pasteFromClipboard)
+	return i
+}
+
+// GetClipboard returns the clipboard text.
+func (i *InputField) GetClipboardText() string {
+	return i.textArea.GetClipboardText()
+}
+
 // SetMaskCharacter sets a character that masks user input on a screen. A value
 // of 0 disables masking.
 func (i *InputField) SetMaskCharacter(mask rune) *InputField {
@@ -655,7 +666,6 @@ func (i *InputField) InputHandler() func(event *tcell.EventKey, setFocus func(p 
 			}
 		}
 
-		// Process special key events for the input field.
 		switch key := event.Key(); key {
 		case tcell.KeyDown:
 			i.autocompleteListMutex.Unlock() // We're still holding a lock.
