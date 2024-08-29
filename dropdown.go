@@ -91,9 +91,8 @@ type DropDown struct {
 func NewDropDown() *DropDown {
 	list := NewList()
 	list.ShowSecondaryText(false).
-		SetMainTextColor(Styles.PrimitiveBackgroundColor).
-		SetSelectedTextColor(Styles.PrimitiveBackgroundColor).
-		SetSelectedBackgroundColor(Styles.PrimaryTextColor).
+		SetMainTextStyle(tcell.StyleDefault.Background(Styles.MoreContrastBackgroundColor).Foreground(Styles.PrimitiveBackgroundColor)).
+		SetSelectedStyle(tcell.StyleDefault.Background(Styles.PrimaryTextColor).Foreground(Styles.PrimitiveBackgroundColor)).
 		SetHighlightFullLine(true).
 		SetBackgroundColor(Styles.MoreContrastBackgroundColor)
 
@@ -208,10 +207,9 @@ func (d *DropDown) SetPrefixTextColor(color tcell.Color) *DropDown {
 // as well as selected items). Style attributes are currently ignored but may be
 // used in the future.
 func (d *DropDown) SetListStyles(unselected, selected tcell.Style) *DropDown {
-	fg, bg, _ := unselected.Decompose()
-	d.list.SetMainTextColor(fg).SetBackgroundColor(bg)
-	fg, bg, _ = selected.Decompose()
-	d.list.SetSelectedTextColor(fg).SetSelectedBackgroundColor(bg)
+	d.list.SetMainTextStyle(unselected).SetSelectedStyle(selected)
+	_, bg, _ := unselected.Decompose()
+	d.list.SetBackgroundColor(bg)
 	return d
 }
 
@@ -276,10 +274,8 @@ func (d *DropDown) AddOption(text string, selected func()) *DropDown {
 func (d *DropDown) SetOptions(texts []string, selected func(text string, index int)) *DropDown {
 	d.list.Clear()
 	d.options = nil
-	for index, text := range texts {
-		func(t string, i int) {
-			d.AddOption(text, nil)
-		}(text, index)
+	for _, text := range texts {
+		d.AddOption(text, nil)
 	}
 	d.selected = selected
 	return d
@@ -291,8 +287,12 @@ func (d *DropDown) GetOptionCount() int {
 }
 
 // RemoveOption removes the specified option from the drop-down. Panics if the
-// index is out of range.
+// index is out of range. If the currently selected option is removed, no option
+// will be selected.
 func (d *DropDown) RemoveOption(index int) *DropDown {
+	if index == d.currentOption {
+		d.currentOption = -1
+	}
 	d.options = append(d.options[:index], d.options[index+1:]...)
 	d.list.RemoveItem(index)
 	return d
@@ -513,11 +513,12 @@ func (d *DropDown) openList(setFocus func(Primitive)) {
 		d.closeList(setFocus)
 
 		// Trigger "selected" event.
+		currentOption := d.options[d.currentOption]
 		if d.selected != nil {
-			d.selected(d.options[d.currentOption].Text, d.currentOption)
+			d.selected(currentOption.Text, d.currentOption)
 		}
-		if d.options[d.currentOption].Selected != nil {
-			d.options[d.currentOption].Selected()
+		if currentOption.Selected != nil {
+			currentOption.Selected()
 		}
 	}).SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if event.Key() == tcell.KeyRune {

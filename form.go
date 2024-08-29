@@ -30,7 +30,7 @@ type FormItem interface {
 
 	// GetFieldWidth returns the width of the form item's field (the area which
 	// is manipulated by the user) in number of screen cells. A value of 0
-	// indicates the the field width is flexible and may use as much space as
+	// indicates the field width is flexible and may use as much space as
 	// required.
 	GetFieldWidth() int
 
@@ -861,6 +861,29 @@ func (f *Form) InputHandler() func(event *tcell.EventKey, setFocus func(p Primit
 			if button.HasFocus() {
 				if handler := button.InputHandler(); handler != nil {
 					handler(event, setFocus)
+					return
+				}
+			}
+		}
+	})
+}
+
+// PasteHandler returns the handler for this primitive.
+func (f *Form) PasteHandler() func(pastedText string, setFocus func(p Primitive)) {
+	return f.WrapPasteHandler(func(pastedText string, setFocus func(p Primitive)) {
+		for _, item := range f.items {
+			if item != nil && item.HasFocus() {
+				if handler := item.PasteHandler(); handler != nil {
+					handler(pastedText, setFocus)
+					return
+				}
+			}
+		}
+
+		for _, button := range f.buttons {
+			if button.HasFocus() {
+				if handler := button.PasteHandler(); handler != nil {
+					handler(pastedText, setFocus)
 					return
 				}
 			}

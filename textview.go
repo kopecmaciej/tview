@@ -1,6 +1,7 @@
 package tview
 
 import (
+	"math"
 	"strings"
 	"sync"
 
@@ -590,7 +591,7 @@ func (t *TextView) clear() {
 // may also provide nil to turn off all highlights).
 //
 // For more information on regions, see class description. Empty region strings
-// are ignored.
+// or regions not contained in the text are ignored.
 //
 // Text in highlighted regions will be drawn inverted, i.e. with their
 // background and foreground colors swapped.
@@ -610,6 +611,15 @@ func (t *TextView) Highlight(regionIDs ...string) *TextView {
 		}
 		return true
 	})
+
+	// Remove unknown regions.
+	newRegions := make([]string, 0, len(regionIDs))
+	for _, regionID := range regionIDs {
+		if _, ok := t.regions[regionID]; ok {
+			newRegions = append(newRegions, regionID)
+		}
+	}
+	regionIDs = newRegions
 
 	// Toggle highlights.
 	if t.toggleHighlights {
@@ -832,15 +842,22 @@ func (t *TextView) resetIndex() {
 // parseAhead parses the text buffer starting at the last line in
 // [TextView.lineIndex] until either the end of the buffer or until stop returns
 // true for the last complete line that was parsed. If wrapping is enabled,
-// width will be used as the available screen width.
+// width will be used as the available screen width. If width is 0, it is
+// assumed that there is no wrapping. This can happen when this function is
+// called before the first time [TextView.Draw] is called.
 //
 // There is no guarantee that stop will ever be called.
 //
 // The function adds entries to the [TextView.lineIndex] slice and the
 // [TextView.regions] map and adjusts [TextView.longestLine].
 func (t *TextView) parseAhead(width int, stop func(lineNumber int, line *textViewLine) bool) {
-	if t.text.Len() == 0 || width == 0 {
+	if t.text.Len() == 0 {
 		return // No text. Nothing to parse.
+	}
+
+	// If width is 0, make it infinite.
+	if width == 0 {
+		width = math.MaxInt
 	}
 
 	// What kind of tags do we scan for?
@@ -1038,6 +1055,17 @@ func (t *TextView) Draw(screen tcell.Screen) {
 
 	// Scroll to highlighted regions.
 	if t.regionTags && t.scrollToHighlights {
+		// Make sure we know all highlighted regions.
+		t.parseAhead(width, func(lineNumber int, line *textViewLine) bool {
+			for regionID := range t.highlights {
+				if _, ok := t.regions[regionID]; !ok {
+					return false
+				}
+				t.highlights[regionID] = struct{}{}
+			}
+			return true
+		})
+
 		// What is the line range for all highlighted regions?
 		var (
 			firstRegion                string
@@ -1343,14 +1371,14 @@ func (t *TextView) MouseHandler() func(action MouseAction, event *tcell.EventMou
 			return false, nil
 		}
 
+		rectX, rectY, width, height := t.GetInnerRect()
 		switch action {
 		case MouseLeftDown:
 			setFocus(t)
 			consumed = true
 		case MouseLeftClick:
-			if t.regionTags {
+			if t.regionTags && t.InInnerRect(x, y) {
 				// Find a region to highlight.
-				rectX, rectY, _, _ := t.GetInnerRect()
 				x -= rectX
 				y -= rectY
 				var highlightedID string
@@ -1371,11 +1399,26 @@ func (t *TextView) MouseHandler() func(action MouseAction, event *tcell.EventMou
 			}
 			consumed = true
 		case MouseScrollUp:
+			if !t.scrollable {
+				break
+			}
 			t.trackEnd = false
 			t.lineOffset--
 			consumed = true
 		case MouseScrollDown:
+			if !t.scrollable {
+				break
+			}
 			t.lineOffset++
+			if len(t.lineIndex)-t.lineOffset < height {
+				// If we scroll to the end, turn on tracking.
+				t.parseAhead(width, func(lineNumber int, line *textViewLine) bool {
+					return len(t.lineIndex)-t.lineOffset < height
+				})
+				if len(t.lineIndex)-t.lineOffset < height {
+					t.trackEnd = true
+				}
+			}
 			consumed = true
 		}
 

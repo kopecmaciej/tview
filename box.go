@@ -157,8 +157,8 @@ func (b *Box) GetDrawFunc() func(screen tcell.Screen, x, y, width, height int) (
 	return b.draw
 }
 
-// WrapInputHandler wraps an input handler (see InputHandler()) with the
-// functionality to capture input (see SetInputCapture()) before passing it
+// WrapInputHandler wraps an input handler (see [Box.InputHandler]) with the
+// functionality to capture input (see [Box.SetInputCapture]) before passing it
 // on to the provided (default) input handler.
 //
 // This is only meant to be used by subclassing primitives.
@@ -173,9 +173,23 @@ func (b *Box) WrapInputHandler(inputHandler func(*tcell.EventKey, func(p Primiti
 	}
 }
 
-// InputHandler returns nil.
+// InputHandler returns nil. Box has no default input handling.
 func (b *Box) InputHandler() func(event *tcell.EventKey, setFocus func(p Primitive)) {
 	return b.WrapInputHandler(nil)
+}
+
+// WrapPasteHandler wraps a paste handler (see [Box.PasteHandler]).
+func (b *Box) WrapPasteHandler(pasteHandler func(string, func(p Primitive))) func(string, func(p Primitive)) {
+	return func(text string, setFocus func(p Primitive)) {
+		if pasteHandler != nil {
+			pasteHandler(text, setFocus)
+		}
+	}
+}
+
+// PasteHandler returns nil. Box has no default paste handling.
+func (b *Box) PasteHandler() func(pastedText string, setFocus func(p Primitive)) {
+	return b.WrapPasteHandler(nil)
 }
 
 // SetInputCapture installs a function which captures key events before they are
@@ -188,6 +202,9 @@ func (b *Box) InputHandler() func(event *tcell.EventKey, setFocus func(p Primiti
 //
 // This function can also be used on container primitives (like Flex, Grid, or
 // Form) as keyboard events will be handed down until they are handled.
+//
+// Pasted key events are not forwarded to the input capture function if pasting
+// is enabled (see [Application.EnablePaste]).
 func (b *Box) SetInputCapture(capture func(event *tcell.EventKey) *tcell.EventKey) *Box {
 	b.inputCapture = capture
 	return b
@@ -199,8 +216,8 @@ func (b *Box) GetInputCapture() func(event *tcell.EventKey) *tcell.EventKey {
 	return b.inputCapture
 }
 
-// WrapMouseHandler wraps a mouse event handler (see MouseHandler()) with the
-// functionality to capture mouse events (see SetMouseCapture()) before passing
+// WrapMouseHandler wraps a mouse event handler (see [Box.MouseHandler]) with the
+// functionality to capture mouse events (see [Box.SetMouseCapture]) before passing
 // them on to the provided (default) event handler.
 //
 // This is only meant to be used by subclassing primitives.
@@ -209,14 +226,18 @@ func (b *Box) WrapMouseHandler(mouseHandler func(MouseAction, *tcell.EventMouse,
 		if b.mouseCapture != nil {
 			action, event = b.mouseCapture(action, event)
 		}
-		if event != nil && mouseHandler != nil {
+		if event == nil {
+			if action == MouseConsumed {
+				consumed = true
+			}
+		} else if mouseHandler != nil {
 			consumed, capture = mouseHandler(action, event, setFocus)
 		}
 		return
 	}
 }
 
-// MouseHandler returns nil.
+// MouseHandler returns nil. Box has no default mouse handling.
 func (b *Box) MouseHandler() func(action MouseAction, event *tcell.EventMouse, setFocus func(p Primitive)) (consumed bool, capture Primitive) {
 	return b.WrapMouseHandler(func(action MouseAction, event *tcell.EventMouse, setFocus func(p Primitive)) (consumed bool, capture Primitive) {
 		if action == MouseLeftDown && b.InRect(event.Position()) {
@@ -234,7 +255,15 @@ func (b *Box) MouseHandler() func(action MouseAction, event *tcell.EventMouse, s
 // returning a nil mouse event, in which case the default handler will not be
 // called.
 //
+// When a nil event is returned, the returned mouse action value may be set to
+// [MouseConsumed] to indicate that the event was consumed and the screen should
+// be redrawn. Any other value will not cause a redraw.
+//
 // Providing a nil handler will remove a previously existing handler.
+//
+// Note that mouse events are ignored completely if the application has not been
+// enabled for mouse events (see [Application.EnableMouse]), which is the
+// default.
 func (b *Box) SetMouseCapture(capture func(action MouseAction, event *tcell.EventMouse) (MouseAction, *tcell.EventMouse)) *Box {
 	b.mouseCapture = capture
 	return b
@@ -244,6 +273,13 @@ func (b *Box) SetMouseCapture(capture func(action MouseAction, event *tcell.Even
 // rectangle.
 func (b *Box) InRect(x, y int) bool {
 	rectX, rectY, width, height := b.GetRect()
+	return x >= rectX && x < rectX+width && y >= rectY && y < rectY+height
+}
+
+// InInnerRect returns true if the given coordinate is within the bounds of the
+// box's inner rectangle (within the border and padding).
+func (b *Box) InInnerRect(x, y int) bool {
+	rectX, rectY, width, height := b.GetInnerRect()
 	return x >= rectX && x < rectX+width && y >= rectY && y < rectY+height
 }
 
@@ -421,8 +457,8 @@ func (b *Box) DrawForSubclass(screen tcell.Screen, p Primitive) {
 }
 
 // SetFocusFunc sets a callback function which is invoked when this primitive
-// receives focus. Container primitives such as Flex or Grid may not be notified
-// if one of their descendents receive focus directly.
+// receives focus. Container primitives such as [Flex] or [Grid] may not be
+// notified if one of their descendents receive focus directly.
 //
 // Set to nil to remove the callback function.
 func (b *Box) SetFocusFunc(callback func()) *Box {
@@ -431,8 +467,8 @@ func (b *Box) SetFocusFunc(callback func()) *Box {
 }
 
 // SetBlurFunc sets a callback function which is invoked when this primitive
-// loses focus. This does not apply to container primitives such as Flex or
-// Grid.
+// loses focus. This does not apply to container primitives such as [Flex] or
+// [Grid].
 //
 // Set to nil to remove the callback function.
 func (b *Box) SetBlurFunc(callback func()) *Box {

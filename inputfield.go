@@ -68,6 +68,11 @@ type AutocompleteItem struct {
 //
 //   - Tab, BackTab, Enter, Escape: Finish editing.
 //
+// Note that while pressing Tab or Enter is intercepted by the input field, it
+// is possible to paste such characters into the input field, possibly resulting
+// in multi-line input. You can use [InputField.SetAcceptanceFunc] to prevent
+// this.
+//
 // If autocomplete functionality is configured:
 //
 //   - Down arrow: Open the autocomplete drop-down.
@@ -140,7 +145,7 @@ func NewInputField() *InputField {
 	})
 	i.textArea.textStyle = tcell.StyleDefault.Background(Styles.ContrastBackgroundColor).Foreground(Styles.PrimaryTextColor)
 	i.textArea.placeholderStyle = tcell.StyleDefault.Background(Styles.ContrastBackgroundColor).Foreground(Styles.ContrastSecondaryTextColor)
-	i.autocompleteStyles.main = tcell.StyleDefault.Foreground(Styles.PrimitiveBackgroundColor)
+	i.autocompleteStyles.main = tcell.StyleDefault.Background(Styles.MoreContrastBackgroundColor).Foreground(Styles.PrimitiveBackgroundColor)
 	i.autocompleteStyles.selected = tcell.StyleDefault.Background(Styles.PrimaryTextColor).Foreground(Styles.PrimitiveBackgroundColor)
 	i.autocompleteStyles.background = Styles.MoreContrastBackgroundColor
 	return i
@@ -342,6 +347,17 @@ func (i *InputField) SetDisabled(disabled bool) FormItem {
 	return i
 }
 
+// SetClipboard sets the clipboard text.
+func (i *InputField) SetClipboard(copyToClipboard func(string), pasteFromClipboard func() string) *InputField {
+	i.textArea.SetClipboard(copyToClipboard, pasteFromClipboard)
+	return i
+}
+
+// GetClipboard returns the clipboard text.
+func (i *InputField) GetClipboardText() string {
+	return i.textArea.GetClipboardText()
+}
+
 // SetMaskCharacter sets a character that masks user input on a screen. A value
 // of 0 disables masking.
 func (i *InputField) SetMaskCharacter(mask rune) *InputField {
@@ -457,6 +473,8 @@ func (i *InputField) Autocomplete() *InputField {
 // This package defines a number of variables prefixed with InputField which may
 // be used for common input (e.g. numbers, maximum text length). See for example
 // [InputFieldInteger].
+//
+// When text is pasted, lastChar is 0.
 func (i *InputField) SetAcceptanceFunc(handler func(textToCheck string, lastChar rune) bool) *InputField {
 	i.accept = handler
 	return i
@@ -648,7 +666,6 @@ func (i *InputField) InputHandler() func(event *tcell.EventKey, setFocus func(p 
 			}
 		}
 
-		// Process special key events for the input field.
 		switch key := event.Key(); key {
 		case tcell.KeyDown:
 			i.autocompleteListMutex.Unlock() // We're still holding a lock.
@@ -656,6 +673,11 @@ func (i *InputField) InputHandler() func(event *tcell.EventKey, setFocus func(p 
 			i.autocompleteListMutex.Lock()
 		case tcell.KeyEnter, tcell.KeyEscape, tcell.KeyTab, tcell.KeyBacktab:
 			finish(key)
+		case tcell.KeyCtrlV:
+			if i.accept != nil && !i.accept(i.textArea.getTextBeforeCursor()+i.textArea.GetClipboardText()+i.textArea.getTextAfterCursor(), 0) {
+				return
+			}
+			i.textArea.InputHandler()(event, setFocus)
 		case tcell.KeyRune:
 			if event.Modifiers()&tcell.ModAlt == 0 && i.accept != nil {
 				// Check if this rune is accepted.
@@ -727,5 +749,30 @@ func (i *InputField) MouseHandler() func(action MouseAction, event *tcell.EventM
 		consumed, capture = i.textArea.MouseHandler()(action, event, setFocus)
 
 		return
+	})
+}
+
+// PasteHandler returns the handler for this primitive.
+func (i *InputField) PasteHandler() func(pastedText string, setFocus func(p Primitive)) {
+	return i.WrapPasteHandler(func(pastedText string, setFocus func(p Primitive)) {
+		// Input field may be disabled.
+		if i.textArea.GetDisabled() {
+			return
+		}
+
+		// The autocomplete drop down may be open.
+		i.autocompleteListMutex.Lock()
+		defer i.autocompleteListMutex.Unlock()
+		if i.autocompleteList != nil {
+			return
+		}
+
+		// We may not accept this text.
+		if i.accept != nil && !i.accept(i.textArea.getTextBeforeCursor()+pastedText+i.textArea.getTextAfterCursor(), 0) {
+			return
+		}
+
+		// Forward the pasted text to the text area.
+		i.textArea.PasteHandler()(pastedText, setFocus)
 	})
 }

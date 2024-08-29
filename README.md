@@ -27,7 +27,7 @@ They come with lots of customization options and can be easily extended to fit y
 To add this package to your project:
 
 ```bash
-go get github.com/rivo/tview
+go get github.com/rivo/tview@master
 ```
 
 ## Hello World
@@ -61,6 +61,7 @@ For a presentation highlighting this package, compile and run the program found 
 - [CLI bookmark manager](https://github.com/Endi1/drawer)
 - [A caving database interface written in Go](https://github.com/IdlePhysicist/cave-logger)
 - [Interactive file browse and exec any command.](https://github.com/bannzai/itree)
+- [A complete TUI for LDAP](https://github.com/Macmod/godap)
 - [A simple CRM](https://github.com/broadcastle/crm)
 - [Terminal UI for todist](https://github.com/cyberdummy/todoista)
 - [Graphical kubectl wrapper](https://github.com/dcaiafa/kpick)
@@ -123,6 +124,16 @@ For a presentation highlighting this package, compile and run the program found 
 - [A TUI CLI manager](https://github.com/costa86/cli-manager)
 - [PrivateBTC](https://github.com/adrianbrad/privatebtc)
 - [play: A TUI playground to experiment with your favorite programs, such as grep, sed, awk, jq and yq](https://github.com/paololazzari/play)
+- [gorest: Enjoy making HTTP requests in your terminal, just like you do in Insomnia.](https://github.com/NathanFirmo/gorest)
+- [Terminal-based application to listen Radio Stations around the world!](https://github.com/vergonha/garden-tui)
+- [ntui: A TUI to manage Hashicorp Nomad clusters](https://github.com/SHAPPY0/ntui)
+- [lazysql: A cross-platform TUI database management tool written in Go](https://github.com/jorgerojas26/lazysql)
+- [redis-tui: A Redis Text-based UI client in CLI](https://github.com/mylxsw/redis-tui)
+- [fen: File manager](https://github.com/kivattt/fen)
+- [sqltui: A terminal UI to operate sql and nosql databases](https://github.com/LinPr/sqltui)
+- [DBee: Simple database browser](https://github.com/murat-cileli/dbee)
+- [oddshub: A TUI for sports betting odds](https://github.com/dos-2/oddshub)
+- [envolve: Terminal based interactive app for manage enviroment variables](https://github.com/erdemkosk/envolve)
 
 ## Documentation
 
