@@ -1342,7 +1342,7 @@ func (t *Table) Draw(screen tcell.Screen) {
 	var backgroundColors []tcell.Color
 	for rowY, row := range rows {
 		columnX := 0
-		rowSelected := t.rowsSelectable && (t.selectedRows[row] || row == t.selectedRow)
+		rowSelected := t.rowsSelectable && !t.columnsSelectable && (t.selectedRows[row] || row == t.selectedRow)
 		for columnIndex, column := range columns {
 			columnWidth := widths[columnIndex]
 			cell := t.content.GetCell(row, column)
