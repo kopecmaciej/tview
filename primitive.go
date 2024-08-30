@@ -2,6 +2,8 @@ package tview
 
 import "github.com/gdamore/tcell/v2"
 
+type Identifier string
+
 // Primitive is the top-most interface for all graphical primitives.
 type Primitive interface {
 	// Draw draws this primitive onto the screen. Implementers can call the
@@ -66,4 +68,10 @@ type Primitive interface {
 	// future. If you subclass from Box, it is recommended that you wrap your
 	// handler using Box.WrapPasteHandler() so you inherit that functionality.
 	PasteHandler() func(text string, setFocus func(p Primitive))
+
+	// GetIdentifier returns the identifier of the primitive.
+	GetIdentifier() Identifier
+
+	// SetIdentifier sets the identifier of the primitive.
+	SetIdentifier(id Identifier)
 }

@@ -42,6 +42,9 @@ type Box struct {
 	// The title. Only visible if there is a border, too.
 	title string
 
+	// identifier for the Box
+	id Identifier
+
 	// The color of the title.
 	titleColor tcell.Color
 
@@ -84,6 +87,16 @@ func NewBox() *Box {
 		titleAlign:      AlignCenter,
 	}
 	return b
+}
+
+// GetIdentifier returns the identifier of the Box
+func (b *Box) GetIdentifier() Identifier {
+	return b.id
+}
+
+// SetIdentifier sets the identifier of the Box
+func (b *Box) SetIdentifier(id Identifier) {
+	b.id = id
 }
 
 // SetBorderPadding sets the size of the borders around the box content.
