@@ -597,11 +597,10 @@ func (l *List) Draw(screen tcell.Screen) {
 		}
 
 		// Secondary text.
-		if l.showSecondaryText {
+		if l.showSecondaryText && item.SecondaryText != "" {
 			sX := x
 			maxWidth = width
 			if l.inlined {
-				sX = x + TaggedStringWidth(item.MainText)
 				maxWidth += TaggedStringWidth(item.SecondaryText) + 1
 			}
 			if l.wrapText {
@@ -656,7 +655,7 @@ func (l *List) adjustOffset() {
 	}
 
 	itemHeight := 1
-	if l.showSecondaryText {
+	if l.showSecondaryText && l.items[l.currentItem].SecondaryText != "" {
 		itemHeight = 2
 	}
 	itemHeight += l.itemGap
@@ -786,7 +785,7 @@ func (l *List) indexAtPoint(x, y int) int {
 	}
 
 	index := y - rectY
-	if l.showSecondaryText {
+	if l.showSecondaryText && l.items[l.currentItem].SecondaryText != "" {
 		index /= 2
 	}
 	index += l.itemOffset
@@ -833,7 +832,7 @@ func (l *List) MouseHandler() func(action MouseAction, event *tcell.EventMouse, 
 			consumed = true
 		case MouseScrollDown:
 			lines := len(l.items) - l.itemOffset
-			if l.showSecondaryText {
+			if l.showSecondaryText && l.items[l.currentItem].SecondaryText != "" {
 				lines *= 2
 			}
 			if _, _, _, height := l.GetInnerRect(); lines > height {

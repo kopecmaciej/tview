@@ -434,7 +434,7 @@ func (i *InputField) Autocomplete() *InputField {
 		i.autocompleteList.ShowSecondaryText(style.showSecondaryText).
 			SetMainTextStyle(style.main).
 			SetSelectedStyle(style.selected).
-			SetHighlightFullLine(true).
+			SetHighlightFullLine(false).
 			SetBackgroundColor(style.background)
 
 		if i.autocompleteList.showSecondaryText {
@@ -561,16 +561,21 @@ func (i *InputField) Draw(screen tcell.Screen) {
 	i.autocompleteListMutex.Lock()
 	defer i.autocompleteListMutex.Unlock()
 	if i.autocompleteList != nil {
-		// How much space do we need?
-		lheight := i.autocompleteList.GetItemCount()
+		// Calculate the maximum width of list items
 		lwidth := 0
-		for index := 0; index < lheight; index++ {
-			entry, _ := i.autocompleteList.GetItemText(index)
-			width := TaggedStringWidth(entry)
+		for index := 0; index < i.autocompleteList.GetItemCount(); index++ {
+			main, secondary := i.autocompleteList.GetItemText(index)
+			width := TaggedStringWidth(main)
+			if i.autocompleteList.showSecondaryText {
+				width += TaggedStringWidth(secondary) + 1 // +1 for space between main and secondary
+			}
 			if width > lwidth {
 				lwidth = width
 			}
 		}
+
+		// How much space do we need?
+		lheight := i.autocompleteList.GetItemCount()
 
 		// We prefer to drop down but if there is no space, maybe drop up?
 		lx := x + labelWidth + i.textArea.cursor.column
@@ -585,6 +590,8 @@ func (i *InputField) Draw(screen tcell.Screen) {
 		if ly+lheight >= sheight {
 			lheight = sheight - ly
 		}
+
+		// Set the list's position and size
 		i.autocompleteList.SetRect(lx, ly, lwidth, lheight)
 		i.autocompleteList.Draw(screen)
 	}
