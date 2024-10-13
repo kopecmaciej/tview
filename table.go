@@ -893,11 +893,22 @@ func (t *Table) ScrollToEnd() *Table {
 }
 
 func (t *Table) MoveUp() {
-	t.up()
+	if t.up != nil {
+		t.up()
+	} else {
+		// Not the cleanest way to do this, but it works for now
+		f := t.InputHandler()
+		f(tcell.NewEventKey(tcell.KeyUp, ' ', tcell.ModNone), nil)
+	}
 }
 
 func (t *Table) MoveDown() {
-	t.down()
+	if t.down != nil {
+		t.down()
+	} else {
+		f := t.InputHandler()
+		f(tcell.NewEventKey(tcell.KeyDown, ' ', tcell.ModNone), nil)
+	}
 }
 
 // SetWrapSelection determines whether a selection wraps vertically or
