@@ -308,6 +308,18 @@ func (f *Form) AddInputField(label, value string, fieldWidth int, accept func(te
 	return f
 }
 
+// AddInputFieldWithAutocomplete adds an input field that has autocomplete functionality
+func (f *Form) AddInputFieldWithAutocomplete(label, value string, fieldWidth int, autocomplete func(text string) []AutocompleteItem, accept func(textToCheck string, lastChar rune) bool, changed func(text string)) *Form {
+	f.items = append(f.items, NewInputField().
+		SetLabel(label).
+		SetText(value).
+		SetFieldWidth(fieldWidth).
+		SetAcceptanceFunc(accept).
+		SetChangedFunc(changed).
+		SetAutocompleteFunc(autocomplete))
+	return f
+}
+
 // AddPasswordField adds a password field to the form. This is similar to an
 // input field except that the user's input not shown. Instead, a "mask"
 // character is displayed. The password field has a label, an optional initial
