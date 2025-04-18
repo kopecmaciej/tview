@@ -1680,14 +1680,30 @@ func (t *Table) InputHandler() func(event *tcell.EventKey, setFocus func(p Primi
 					offsetAmount = 0
 				}
 				if t.rowsSelectable {
-					row, column := t.selectedRow, t.selectedColumn
+					originalRow, originalColumn := t.selectedRow, t.selectedColumn
 					t.selectedRow -= offsetAmount
 					if t.selectedRow < 0 {
 						t.selectedRow = 0
 					}
+
+					startRow, targetColumn := t.selectedRow, originalColumn
+					for row := startRow; row < originalRow; row++ {
+						cell := t.content.GetCell(row, targetColumn)
+						if cell != nil && !cell.NotSelectable {
+							t.selectedRow, t.selectedColumn = row, targetColumn
+							t.clampToSelection = true
+							return
+						}
+					}
+
+					t.selectedRow, t.selectedColumn = originalRow, originalColumn
 					finalRow, finalColumn := 0, 0
+					if t.wrapVertically {
+						finalRow = t.selectedRow
+						finalColumn = t.selectedColumn
+					}
 					if !backwards(finalRow, finalColumn) {
-						forward(row, column)
+						forward(originalRow, originalColumn)
 					}
 					t.clampToSelection = true
 				} else {
