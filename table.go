@@ -1676,20 +1676,29 @@ func (t *Table) InputHandler() func(event *tcell.EventKey, setFocus func(p Primi
 
 			pageUp = func() {
 				offsetAmount := t.visibleRows - t.fixedRows
-				if offsetAmount < 0 {
-					offsetAmount = 0
+				if offsetAmount <= 0 {
+					return
 				}
+
 				if t.rowsSelectable {
-					row, column := t.selectedRow, t.selectedColumn
-					t.selectedRow -= offsetAmount
-					if t.selectedRow < 0 {
-						t.selectedRow = 0
+					originalRow, originalColumn := t.selectedRow, t.selectedColumn
+
+					targetRow := t.selectedRow - offsetAmount
+					if targetRow < 0 {
+						targetRow = 0
 					}
-					finalRow, finalColumn := 0, 0
-					if !backwards(finalRow, finalColumn) {
-						forward(row, column)
+
+					for row := targetRow; row < originalRow; row++ {
+						cell := t.content.GetCell(row, originalColumn)
+						if cell != nil && !cell.NotSelectable {
+							t.selectedRow, t.selectedColumn = row, originalColumn
+							t.clampToSelection = true
+							return
+						}
 					}
-					t.clampToSelection = true
+
+					t.selectedRow, t.selectedColumn = originalRow, originalColumn
+
 				} else {
 					t.trackEnd = false
 					t.rowOffset -= offsetAmount
