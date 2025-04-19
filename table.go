@@ -1704,6 +1704,30 @@ func (t *Table) InputHandler() func(event *tcell.EventKey, setFocus func(p Primi
 					t.rowOffset -= offsetAmount
 				}
 			}
+
+			firstColumn = func() {
+				if t.columnsSelectable {
+					t.selectedColumn = 0
+					forward(t.selectedRow, lastColumn)
+					t.clampToSelection = true
+				} else {
+					t.columnOffset = 0
+				}
+			}
+
+			endColumn = func() {
+				if t.columnsSelectable {
+					t.selectedColumn = t.content.GetColumnCount() - 1
+					backwards(t.selectedRow, 0)
+					t.clampToSelection = true
+				} else {
+					maxColumnOffset := t.content.GetColumnCount() - t.visibleColumnIndices[len(t.visibleColumnIndices)-1] - 1
+					if maxColumnOffset < 0 {
+						maxColumnOffset = 0
+					}
+					t.columnOffset = maxColumnOffset
+				}
+			}
 		)
 
 		t.down = down
@@ -1726,6 +1750,10 @@ func (t *Table) InputHandler() func(event *tcell.EventKey, setFocus func(p Primi
 				right()
 			case 'v':
 				t.ToggleRowSelection(t.selectedRow)
+			case '0':
+				firstColumn()
+			case '$':
+				endColumn()
 			}
 		case tcell.KeyHome:
 			home()
