@@ -72,6 +72,7 @@ type TableCell struct {
 // aligned text with the primary text color (see Styles) and a transparent
 // background (using the background of the Table).
 func NewTableCell(text string) *TableCell {
+
 	return &TableCell{
 		Text:        text,
 		Align:       AlignLeft,
@@ -1353,7 +1354,7 @@ func (t *Table) Draw(screen tcell.Screen) {
 	var backgroundColors []tcell.Color
 	for rowY, row := range rows {
 		columnX := 0
-		rowSelected := t.rowsSelectable && !t.columnsSelectable && (t.selectedRows[row] || row == t.selectedRow)
+		rowSelected := (t.rowsSelectable && !t.columnsSelectable && row == t.selectedRow) || t.selectedRows[row]
 		for columnIndex, column := range columns {
 			columnWidth := widths[columnIndex]
 			cell := t.content.GetCell(row, column)
@@ -1748,8 +1749,6 @@ func (t *Table) InputHandler() func(event *tcell.EventKey, setFocus func(p Primi
 				left()
 			case 'l':
 				right()
-			case 'v':
-				t.ToggleRowSelection(t.selectedRow)
 			case '0':
 				firstColumn()
 			case '$':
