@@ -521,6 +521,10 @@ type Table struct {
 	// selected rows are simply inverted.
 	selectedStyle tcell.Style
 
+	// The style for multi-selected rows. If this value is the empty struct,
+	// multi-selected rows use the selectedStyle.
+	multiSelectedStyle tcell.Style
+
 	// An optional function which gets called when the user presses Enter on a
 	// selected cell. If entire rows selected, the column value is undefined.
 	// Likewise for entire columns.
@@ -597,6 +601,18 @@ func (t *Table) SetBordersColor(color tcell.Color) *Table {
 //	table.SetSelectedStyle(tcell.StyleDefault)
 func (t *Table) SetSelectedStyle(style tcell.Style) *Table {
 	t.selectedStyle = style
+	return t
+}
+
+// SetMultiSelectedStyle sets a specific style for multi-selected rows. If no such style
+// is set, the selectedStyle will be used. If that is also not set, the cell's
+// background and text color are swapped.
+//
+// To reset a previous setting to its default, make the following call:
+//
+//	table.SetMultiSelectedStyle(tcell.StyleDefault)
+func (t *Table) SetMultiSelectedStyle(style tcell.Style) *Table {
+	t.multiSelectedStyle = style
 	return t
 }
 
@@ -1349,12 +1365,14 @@ func (t *Table) Draw(screen tcell.Screen) {
 		x, y, w, h int
 		cell       *TableCell
 		selected   bool
+		multiSelected bool
 	}
 	cellsByBackgroundColor := make(map[tcell.Color][]*cellInfo)
 	var backgroundColors []tcell.Color
 	for rowY, row := range rows {
 		columnX := 0
-		rowSelected := (t.rowsSelectable && !t.columnsSelectable && row == t.selectedRow) || t.selectedRows[row]
+		rowSelected := t.rowsSelectable && !t.columnsSelectable && row == t.selectedRow
+		rowMultiSelected := t.selectedRows[row]
 		for columnIndex, column := range columns {
 			columnWidth := widths[columnIndex]
 			cell := t.content.GetCell(row, column)
@@ -1369,6 +1387,7 @@ func (t *Table) Draw(screen tcell.Screen) {
 			}
 			columnSelected := t.columnsSelectable && !t.rowsSelectable && column == t.selectedColumn
 			cellSelected := !cell.NotSelectable && (columnSelected || rowSelected || t.rowsSelectable && t.columnsSelectable && column == t.selectedColumn && row == t.selectedRow)
+			cellMultiSelected := !cell.NotSelectable && rowMultiSelected
 			backgroundColor := cell.BackgroundColor
 			if cell.Style != tcell.StyleDefault {
 				_, backgroundColor, _ = cell.Style.Decompose()
@@ -1381,6 +1400,7 @@ func (t *Table) Draw(screen tcell.Screen) {
 				h:        bh,
 				cell:     cell,
 				selected: cellSelected,
+				multiSelected: cellMultiSelected,
 			})
 			if !ok {
 				backgroundColors = append(backgroundColors, backgroundColor)
@@ -1408,6 +1428,16 @@ func (t *Table) Draw(screen tcell.Screen) {
 			if info.selected {
 				if info.cell.SelectedStyle != tcell.StyleDefault {
 					selFg, selBg, selAttr := info.cell.SelectedStyle.Decompose()
+					defer colorBackground(info.x, info.y, info.w, info.h, selBg, selFg, false, false, selAttr, false)
+				} else if t.selectedStyle != tcell.StyleDefault {
+					selFg, selBg, selAttr := t.selectedStyle.Decompose()
+					defer colorBackground(info.x, info.y, info.w, info.h, selBg, selFg, false, false, selAttr, false)
+				} else {
+					defer colorBackground(info.x, info.y, info.w, info.h, bgColor, textColor, false, false, 0, true)
+				}
+			} else if info.multiSelected {
+				if t.multiSelectedStyle != tcell.StyleDefault {
+					selFg, selBg, selAttr := t.multiSelectedStyle.Decompose()
 					defer colorBackground(info.x, info.y, info.w, info.h, selBg, selFg, false, false, selAttr, false)
 				} else if t.selectedStyle != tcell.StyleDefault {
 					selFg, selBg, selAttr := t.selectedStyle.Decompose()
