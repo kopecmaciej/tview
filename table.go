@@ -541,6 +541,15 @@ type Table struct {
 
 	// up, down are function keys for moving the selection up and down
 	up, down func()
+
+	// Whether to show a scrollbar on the right border when content overflows.
+	scrollBarEnabled bool
+
+	// The style of the scrollbar thumb.
+	scrollBarThumbStyle tcell.Style
+
+	// The style of the scrollbar track.
+	scrollBarTrackStyle tcell.Style
 }
 
 // NewTable returns a new table.
@@ -941,6 +950,21 @@ func (t *Table) MoveDown() {
 func (t *Table) SetWrapSelection(vertical, horizontal bool) *Table {
 	t.wrapHorizontally = horizontal
 	t.wrapVertically = vertical
+	return t
+}
+
+// SetScrollBarEnabled enables or disables a scrollbar on the right border of
+// the table. The scrollbar is only drawn when the table has a border and the
+// content overflows the visible area.
+func (t *Table) SetScrollBarEnabled(enabled bool) *Table {
+	t.scrollBarEnabled = enabled
+	return t
+}
+
+// SetScrollBarStyle sets the styles for the scrollbar thumb and track.
+func (t *Table) SetScrollBarStyle(thumb, track tcell.Style) *Table {
+	t.scrollBarThumbStyle = thumb
+	t.scrollBarTrackStyle = track
 	return t
 }
 
@@ -1453,6 +1477,55 @@ func (t *Table) Draw(screen tcell.Screen) {
 
 	// Remember column infos.
 	t.visibleColumnIndices, t.visibleColumnWidths = columns, widths
+
+	// Draw scrollbar on the right border.
+	if t.scrollBarEnabled {
+		t.drawScrollBar(screen)
+	}
+}
+
+func (t *Table) drawScrollBar(screen tcell.Screen) {
+	totalRows := t.content.GetRowCount()
+	if totalRows == 0 {
+		return
+	}
+
+	_, _, _, innerHeight := t.GetInnerRect()
+	if t.borders {
+		innerHeight = innerHeight / 2
+	}
+	if totalRows <= innerHeight {
+		return
+	}
+
+	ox, oy, ow, oh := t.GetRect()
+
+	borderX := ox + ow - 1
+	trackStart := oy + 1
+	trackHeight := oh - 2
+
+	if trackHeight <= 0 {
+		return
+	}
+
+	thumbSize := trackHeight * innerHeight / totalRows
+	if thumbSize < 1 {
+		thumbSize = 1
+	}
+	maxOffset := totalRows - innerHeight
+	if maxOffset <= 0 {
+		return
+	}
+	thumbPos := trackStart + t.rowOffset*(trackHeight-thumbSize)/maxOffset
+
+	for i := 0; i < trackHeight; i++ {
+		pos := trackStart + i
+		if pos >= thumbPos && pos < thumbPos+thumbSize {
+			screen.SetContent(borderX, pos, '┃', nil, t.scrollBarThumbStyle)
+		} else {
+			screen.SetContent(borderX, pos, '│', nil, t.scrollBarTrackStyle)
+		}
+	}
 }
 
 // InputHandler returns the handler for this primitive.
