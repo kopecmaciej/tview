@@ -99,6 +99,9 @@ type InputField struct {
 	autocompleteList      *List
 	autocompleteListMutex sync.Mutex
 
+	// The maximum number of visible items in the autocomplete drop-down. 0 means no limit.
+	autocompleteMaxHeight int
+
 	// The styles of the autocomplete entries.
 	autocompleteStyles struct {
 		main              tcell.Style
@@ -159,6 +162,11 @@ func (i *InputField) SetText(text string) *InputField {
 }
 
 // GetWordAtCursor returns the word under the cursor.
+// GetTextBeforeCursor returns the text from the start of the input up to the cursor.
+func (i *InputField) GetTextBeforeCursor() string {
+	return i.textArea.getTextBeforeCursor()
+}
+
 func (i *InputField) GetWordAtCursor() string {
 	textBefore := i.textArea.getTextBeforeCursor()
 	if len(textBefore) == 0 || textBefore[len(textBefore)-1] == ' ' {
@@ -216,6 +224,18 @@ func (i *InputField) SetWordAtCursor(word string) *InputField {
 // GetText returns the current text of the input field.
 func (i *InputField) GetText() string {
 	return i.textArea.GetText()
+}
+
+// GetCursorPosition returns the current cursor column position.
+func (i *InputField) GetCursorPosition() int {
+	return len(i.textArea.getTextBeforeCursor())
+}
+
+// SetCursorPosition moves the cursor to the given column position.
+func (i *InputField) SetCursorPosition(col int) *InputField {
+	i.textArea.moveCursor(0, col)
+	i.textArea.selectionStart = i.textArea.cursor
+	return i
 }
 
 // SetLabel sets the text to be displayed before the input area.
@@ -312,6 +332,13 @@ func (i *InputField) SetAutocompleteStyles(background tcell.Color, main, selecte
 	i.autocompleteStyles.selected = selected
 	i.autocompleteStyles.secondary = secondary
 	i.autocompleteStyles.showSecondaryText = showSecondaryText
+	return i
+}
+
+// SetAutocompleteMaxHeight sets the maximum number of items visible in the
+// autocomplete drop-down. Use 0 for no limit.
+func (i *InputField) SetAutocompleteMaxHeight(maxHeight int) *InputField {
+	i.autocompleteMaxHeight = maxHeight
 	return i
 }
 
@@ -576,6 +603,9 @@ func (i *InputField) Draw(screen tcell.Screen) {
 
 		// How much space do we need?
 		lheight := i.autocompleteList.GetItemCount()
+		if i.autocompleteMaxHeight > 0 && lheight > i.autocompleteMaxHeight {
+			lheight = i.autocompleteMaxHeight
+		}
 
 		// We prefer to drop down but if there is no space, maybe drop up?
 		lx := x + labelWidth + i.textArea.cursor.column
