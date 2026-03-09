@@ -27,6 +27,12 @@ type Modal struct {
 	// The optional callback for when the user clicked one of the buttons. It
 	// receives the index of the clicked button and the button's label.
 	done func(buttonIndex int, buttonLabel string)
+
+	// widthPercent and heightPercent control the modal size as a percentage of
+	// the screen. Zero means use the default behaviour (width: 1/3 of screen,
+	// height: auto-sized to content).
+	widthPercent  int
+	heightPercent int
 }
 
 // NewModal returns a new modal message window.
@@ -85,6 +91,20 @@ func (m *Modal) SetButtonStyle(style tcell.Style) *Modal {
 // SetButtonActivatedStyle sets the style of the buttons when they are focused.
 func (m *Modal) SetButtonActivatedStyle(style tcell.Style) *Modal {
 	m.form.SetButtonActivatedStyle(style)
+	return m
+}
+
+// SetWidthPercent sets the modal width as a percentage of the screen width
+// (1–100). The default (0) keeps the original behaviour of screenWidth/3.
+func (m *Modal) SetWidthPercent(percent int) *Modal {
+	m.widthPercent = percent
+	return m
+}
+
+// SetHeightPercent sets the modal height as a percentage of the screen height
+// (1–100). The default (0) auto-sizes the height based on content.
+func (m *Modal) SetHeightPercent(percent int) *Modal {
+	m.heightPercent = percent
 	return m
 }
 
@@ -168,6 +188,9 @@ func (m *Modal) Draw(screen tcell.Screen) {
 	buttonsWidth -= 2
 	screenWidth, screenHeight := screen.Size()
 	width := screenWidth / 3
+	if m.widthPercent > 0 {
+		width = screenWidth * m.widthPercent / 100
+	}
 	if width < buttonsWidth {
 		width = buttonsWidth
 	}
@@ -182,6 +205,12 @@ func (m *Modal) Draw(screen tcell.Screen) {
 
 	// Set the modal's position and size.
 	height := len(lines) + 6
+	if m.heightPercent > 0 {
+		maxHeight := screenHeight * m.heightPercent / 100
+		if height > maxHeight {
+			height = maxHeight
+		}
+	}
 	width += 4
 	x := (screenWidth - width) / 2
 	y := (screenHeight - height) / 2
