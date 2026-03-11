@@ -16,6 +16,9 @@ const (
 	AutocompletedClick           // The user selected an autocomplete entry by clicking the mouse button on it.
 )
 
+// markerRegex matches template markers like <$0>, <$1>, etc.
+var markerRegex = regexp.MustCompile(`<\$[0-9]+>`)
+
 // Predefined InputField acceptance functions.
 var (
 	// InputFieldInteger accepts integers.
@@ -202,8 +205,7 @@ func (i *InputField) SetWordAtCursor(word string) *InputField {
 	textBefore = strings.TrimSuffix(textBefore, wordAtCursor)
 	cursorAtCol := len(textBefore) + len(word)
 
-	re := regexp.MustCompile(`\<\$[0-9]+\>`)
-	if re.MatchString(word) {
+	if markerRegex.MatchString(word) {
 		startIndex := strings.Index(word, "<$")
 		endIndex := strings.Index(word, ">")
 
@@ -219,6 +221,57 @@ func (i *InputField) SetWordAtCursor(word string) *InputField {
 	i.textArea.selectionStart = i.textArea.cursor
 
 	return i
+}
+
+// MoveToNextMarker moves the cursor to the next <$N> marker after the current
+// cursor position, removes that marker, and returns true if one was found.
+// Wraps around to the beginning if no marker exists after the cursor.
+func (i *InputField) MoveToNextMarker() bool {
+	return i.moveToMarker(true)
+}
+
+// MoveToPrevMarker moves the cursor to the previous <$N> marker before the
+// current cursor position, removes that marker, and returns true if one was found.
+// Wraps around to the end if no marker exists before the cursor.
+func (i *InputField) MoveToPrevMarker() bool {
+	return i.moveToMarker(false)
+}
+
+func (i *InputField) moveToMarker(forward bool) bool {
+	text := i.textArea.GetText()
+	matches := markerRegex.FindAllStringIndex(text, -1)
+	if len(matches) == 0 {
+		return false
+	}
+
+	cursorPos := i.GetCursorPosition()
+	var target []int
+	if forward {
+		for _, m := range matches {
+			if m[0] >= cursorPos {
+				target = m
+				break
+			}
+		}
+		if target == nil {
+			target = matches[0] // wrap around
+		}
+	} else {
+		for j := len(matches) - 1; j >= 0; j-- {
+			if matches[j][1] <= cursorPos {
+				target = matches[j]
+				break
+			}
+		}
+		if target == nil {
+			target = matches[len(matches)-1] // wrap around
+		}
+	}
+
+	// Replace removes the marker and leaves the cursor at target[0].
+	i.textArea.Replace(target[0], target[1], "")
+	i.textArea.selectionStart = i.textArea.cursor
+	return true
 }
 
 // GetText returns the current text of the input field.
