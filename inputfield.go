@@ -728,7 +728,7 @@ func (i *InputField) InputHandler() func(event *tcell.EventKey, setFocus func(p 
 					i.autocompleteList = nil
 				}
 				return
-			case tcell.KeyDown, tcell.KeyUp, tcell.KeyTab, tcell.KeyBacktab:
+			case tcell.KeyDown, tcell.KeyUp:
 				i.autocompleteList.SetChangedFunc(func(index int, text, secondaryText string, shortcut rune) {
 					text = stripTags(text)
 					if i.autocompleted != nil {
