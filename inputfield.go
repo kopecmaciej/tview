@@ -164,6 +164,13 @@ func (i *InputField) SetText(text string) *InputField {
 	return i
 }
 
+// SetStyleFunc sets a per-byte-offset style function on the underlying TextArea,
+// enabling syntax highlighting for the input field.
+func (i *InputField) SetStyleFunc(fn func(byteOffset int) tcell.Style) *InputField {
+	i.textArea.SetStyleFunc(fn)
+	return i
+}
+
 // GetWordAtCursor returns the word under the cursor.
 // GetTextBeforeCursor returns the text from the start of the input up to the cursor.
 func (i *InputField) GetTextBeforeCursor() string {
@@ -656,6 +663,9 @@ func (i *InputField) Draw(screen tcell.Screen) {
 
 		// How much space do we need?
 		lheight := i.autocompleteList.GetItemCount()
+		if i.autocompleteStyles.showSecondaryText {
+			lheight *= 2
+		}
 		if i.autocompleteMaxHeight > 0 && lheight > i.autocompleteMaxHeight {
 			lheight = i.autocompleteMaxHeight
 		}

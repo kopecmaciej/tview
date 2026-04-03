@@ -2,6 +2,7 @@ package tview
 
 import (
 	"strings"
+	"sync"
 	"unicode"
 	"unicode/utf8"
 
@@ -346,6 +347,33 @@ type TextArea struct {
 	// A callback function set by the Form class and called when the user leaves
 	// this form item.
 	finished func(tcell.Key)
+
+	// An optional function which returns a style for a given byte offset in the
+	// text. Used for syntax highlighting. If nil, textStyle is used for all text.
+	styleFunc func(byteOffset int) tcell.Style
+
+	// Autocomplete related fields:
+
+	// An optional autocomplete function which receives the current text and the
+	// cursor byte offset and returns a list of autocomplete entries.
+	autocomplete func(text string, cursorBytePos int) []AutocompleteItem
+
+	// The List object showing autocomplete entries. Nil when hidden.
+	autocompleteList      *List
+	autocompleteListMutex sync.Mutex
+
+	// The maximum number of visible items in the autocomplete drop-down. 0 means no limit.
+	autocompleteMaxHeight int
+
+	// The styles of the autocomplete entries.
+	autocompleteStyles struct {
+		main, selected, secondary tcell.Style
+		background                tcell.Color
+		showSecondaryText         bool
+	}
+
+	// An optional function called when the user selects an autocomplete entry.
+	autocompleted func(text string, index int, source int) bool
 }
 
 // NewTextArea returns a new text area. Use [TextArea.SetText] to set the
@@ -370,6 +398,9 @@ func NewTextArea() *TextArea {
 	t.cursor.pos = [3]int{1, 0, -1}
 	t.selectionStart = t.cursor
 	t.SetClipboard(nil, nil)
+	t.autocompleteStyles.main = tcell.StyleDefault.Background(Styles.MoreContrastBackgroundColor).Foreground(Styles.PrimitiveBackgroundColor)
+	t.autocompleteStyles.selected = tcell.StyleDefault.Background(Styles.PrimaryTextColor).Foreground(Styles.PrimitiveBackgroundColor)
+	t.autocompleteStyles.background = Styles.MoreContrastBackgroundColor
 
 	return t
 }
@@ -968,6 +999,115 @@ func (t *TextArea) SetFinishedFunc(handler func(key tcell.Key)) FormItem {
 	return t
 }
 
+// SetStyleFunc sets a function that returns a tcell.Style for each byte offset
+// in the text. When set, it overrides the default textStyle for non-selected
+// characters, enabling syntax highlighting. Set to nil to disable.
+func (t *TextArea) SetStyleFunc(fn func(byteOffset int) tcell.Style) *TextArea {
+	t.styleFunc = fn
+	return t
+}
+
+// GetTextBeforeCursor returns the text of the text area up until the cursor.
+func (t *TextArea) GetTextBeforeCursor() string {
+	return t.getTextBeforeCursor()
+}
+
+// GetCursorByteOffset returns the byte offset of the cursor within the full
+// text of the text area.
+func (t *TextArea) GetCursorByteOffset() int {
+	return t.byteOffsetAt(t.cursor.pos)
+}
+
+// byteOffsetAt returns the byte offset of the given span position within the
+// full text. It walks the piece chain from the beginning.
+func (t *TextArea) byteOffsetAt(pos [3]int) int {
+	if pos[0] == 1 {
+		return t.length
+	}
+	offset := 0
+	spanIndex := t.spans[0].next
+	for spanIndex != 1 {
+		span := &t.spans[spanIndex]
+		if spanIndex == pos[0] {
+			offset += pos[1]
+			break
+		}
+		if span.length < 0 {
+			offset += -span.length
+		} else {
+			offset += span.length
+		}
+		spanIndex = t.spans[spanIndex].next
+	}
+	return offset
+}
+
+// SetAutocompleteFunc sets a function that returns autocomplete suggestions.
+// The function receives the full text and the byte offset of the cursor. Return
+// nil or an empty slice to hide the dropdown.
+func (t *TextArea) SetAutocompleteFunc(fn func(text string, cursorBytePos int) []AutocompleteItem) *TextArea {
+	t.autocomplete = fn
+	return t
+}
+
+// SetAutocompletedFunc sets a callback invoked when the user selects an entry
+// from the autocomplete drop-down. The source argument is one of the
+// Autocompleted* constants. Return true to close the dropdown.
+func (t *TextArea) SetAutocompletedFunc(fn func(text string, index int, source int) bool) *TextArea {
+	t.autocompleted = fn
+	return t
+}
+
+// SetAutocompleteStyles sets the visual styles for the autocomplete dropdown.
+func (t *TextArea) SetAutocompleteStyles(background tcell.Color, main, selected tcell.Style) *TextArea {
+	t.autocompleteStyles.background = background
+	t.autocompleteStyles.main = main
+	t.autocompleteStyles.selected = selected
+	return t
+}
+
+// IsAutocompleteVisible returns true if the autocomplete dropdown is currently shown.
+func (t *TextArea) IsAutocompleteVisible() bool {
+	t.autocompleteListMutex.Lock()
+	defer t.autocompleteListMutex.Unlock()
+	return t.autocompleteList != nil
+}
+
+// Autocomplete invokes the autocomplete callback and populates (or clears) the
+// dropdown list. It is safe to call from any goroutine.
+func (t *TextArea) Autocomplete() *TextArea {
+	t.autocompleteListMutex.Lock()
+	defer t.autocompleteListMutex.Unlock()
+	if t.autocomplete == nil {
+		return t
+	}
+
+	text := t.GetText()
+	cursorPos := t.byteOffsetAt(t.cursor.pos)
+	entries := t.autocomplete(text, cursorPos)
+	if len(entries) == 0 {
+		t.autocompleteList = nil
+		return t
+	}
+
+	if t.autocompleteList == nil {
+		style := t.autocompleteStyles
+		t.autocompleteList = NewList()
+		t.autocompleteList.ShowSecondaryText(false).
+			SetMainTextStyle(style.main).
+			SetSelectedStyle(style.selected).
+			SetHighlightFullLine(false).
+			SetBackgroundColor(style.background)
+	}
+
+	t.autocompleteList.Clear()
+	for _, entry := range entries {
+		t.autocompleteList.AddItem(entry.Main, entry.Secondary, 0, nil)
+	}
+
+	return t
+}
+
 // Focus is called when this primitive receives focus.
 func (t *TextArea) Focus(delegate func(p Primitive)) {
 	// If we're part of a form and this item is disabled, there's nothing the
@@ -1271,9 +1411,11 @@ func (t *TextArea) Draw(screen tcell.Screen) {
 	pos := t.lineStarts[line]
 	endPos := pos
 	posX, posY := 0, 0
+	byteOff := t.byteOffsetAt(pos) // Track byte offset for styleFunc.
 	for pos[0] != 1 {
 		var clusterWidth int
-		cluster, text, _, clusterWidth, pos, endPos = t.step(text, pos, endPos)
+		prevPos := pos
+		cluster, text, _, clusterWidth, pos, endPos = t.step(text, prevPos, endPos)
 
 		// Prepare drawing.
 		runes := []rune(cluster)
@@ -1283,18 +1425,30 @@ func (t *TextArea) Draw(screen tcell.Screen) {
 		if fromRow > toRow || fromRow == toRow && fromColumn > toColumn {
 			fromRow, fromColumn, toRow, toColumn = toRow, toColumn, fromRow, fromColumn
 		}
-		if toRow < line ||
+		inSelection := !(toRow < line ||
 			toRow == line && toColumn <= posX ||
 			fromRow > line ||
-			fromRow == line && fromColumn > posX {
-			style = t.textStyle
+			fromRow == line && fromColumn > posX)
+		if !inSelection {
+			if t.styleFunc != nil {
+				fnStyle := t.styleFunc(byteOff)
+				fg, fnBg, attr := fnStyle.Decompose()
+				if fnBg == tcell.ColorDefault {
+					_, bg, _ := t.textStyle.Decompose()
+					style = tcell.StyleDefault.Foreground(fg).Background(bg).Attributes(attr)
+				} else {
+					style = fnStyle
+				}
+			} else {
+				style = t.textStyle
+			}
 			if t.disabled {
 				style = style.Background(t.backgroundColor)
 			}
 		}
 
 		// Selected tabs are a bit special.
-		if cluster == "\t" && style == t.selectedStyle {
+		if cluster == "\t" && inSelection {
 			for colX := 0; colX < clusterWidth && posX+colX-columnOffset < width; colX++ {
 				screen.SetContent(x+posX+colX-columnOffset, y+posY, ' ', nil, style)
 			}
@@ -1304,6 +1458,8 @@ func (t *TextArea) Draw(screen tcell.Screen) {
 		if posX+clusterWidth-columnOffset <= width && posX-columnOffset >= 0 && clusterWidth > 0 {
 			screen.SetContent(x+posX-columnOffset, y+posY, runes[0], runes[1:], style)
 		}
+
+		byteOff += len(cluster)
 
 		// Advance.
 		posX += clusterWidth
@@ -1315,6 +1471,39 @@ func (t *TextArea) Draw(screen tcell.Screen) {
 			}
 			posX = 0
 			line++
+		}
+	}
+
+	// Draw autocomplete list.
+	t.autocompleteListMutex.Lock()
+	defer t.autocompleteListMutex.Unlock()
+	if t.autocompleteList != nil {
+		lwidth := 0
+		for idx := 0; idx < t.autocompleteList.GetItemCount(); idx++ {
+			main, _ := t.autocompleteList.GetItemText(idx)
+			if w := TaggedStringWidth(main); w > lwidth {
+				lwidth = w
+			}
+		}
+		lheight := t.autocompleteList.GetItemCount()
+		if t.autocompleteMaxHeight > 0 && lheight > t.autocompleteMaxHeight {
+			lheight = t.autocompleteMaxHeight
+		}
+		lx := x + t.cursor.actualColumn - columnOffset
+		ly := y + t.cursor.row - t.rowOffset + 1
+		_, sheight := screen.Size()
+		if ly+lheight >= sheight && ly-1 > lheight {
+			ly = y + t.cursor.row - t.rowOffset - lheight
+			if ly < 0 {
+				ly = 0
+			}
+		}
+		if ly+lheight >= sheight {
+			lheight = sheight - ly
+		}
+		if lwidth > 0 && lheight > 0 {
+			t.autocompleteList.SetRect(lx, ly, lwidth, lheight)
+			t.autocompleteList.Draw(screen)
 		}
 	}
 }
@@ -1967,6 +2156,65 @@ func (t *TextArea) InputHandler() func(event *tcell.EventKey, setFocus func(p Pr
 					t.moved()
 				}
 			}()
+		}
+
+		// Trigger autocomplete after the key is processed.
+		if t.autocomplete != nil {
+			currentText := t.GetText()
+			defer func() {
+				if t.GetText() != currentText {
+					t.Autocomplete()
+				}
+			}()
+		}
+
+		// If we have an autocomplete list, intercept Up/Down/Enter/Escape.
+		t.autocompleteListMutex.Lock()
+		hasAutocomplete := t.autocompleteList != nil
+		t.autocompleteListMutex.Unlock()
+		if hasAutocomplete {
+			switch event.Key() {
+			case tcell.KeyEscape:
+				t.autocompleteListMutex.Lock()
+				t.autocompleteList = nil
+				t.autocompleteListMutex.Unlock()
+				return
+			case tcell.KeyEnter:
+				t.autocompleteListMutex.Lock()
+				if t.autocompleteList != nil {
+					index := t.autocompleteList.GetCurrentItem()
+					text, _ := t.autocompleteList.GetItemText(index)
+					list := t.autocompleteList
+					t.autocompleteListMutex.Unlock()
+					if t.autocompleted != nil {
+						if t.autocompleted(stripTags(text), index, AutocompletedEnter) {
+							t.autocompleteListMutex.Lock()
+							t.autocompleteList = nil
+							t.autocompleteListMutex.Unlock()
+						}
+					} else {
+						_ = list
+						t.autocompleteListMutex.Lock()
+						t.autocompleteList = nil
+						t.autocompleteListMutex.Unlock()
+					}
+				} else {
+					t.autocompleteListMutex.Unlock()
+				}
+				return
+			case tcell.KeyDown, tcell.KeyUp:
+				t.autocompleteListMutex.Lock()
+				if t.autocompleteList != nil {
+					t.autocompleteList.SetChangedFunc(func(index int, text, secondaryText string, shortcut rune) {
+						if t.autocompleted != nil {
+							t.autocompleted(stripTags(text), index, AutocompletedNavigate)
+						}
+					})
+					t.autocompleteList.InputHandler()(event, setFocus)
+				}
+				t.autocompleteListMutex.Unlock()
+				return
+			}
 		}
 
 		// Process the different key events.
