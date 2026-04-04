@@ -666,7 +666,7 @@ func (t *TextArea) Replace(start, end int, text string) *TextArea {
 	t.cursor.pos = t.replace(t.selectionStart.pos, t.cursor.pos, text, false)
 	t.cursor.row = -1
 	t.truncateLines(row - 1)
-	t.findCursor(false, row)
+	t.findCursor(true, row)
 	t.selectionStart = t.cursor
 	if t.moved != nil {
 		t.moved()
