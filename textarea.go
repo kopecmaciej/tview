@@ -2158,11 +2158,14 @@ func (t *TextArea) InputHandler() func(event *tcell.EventKey, setFocus func(p Pr
 			}()
 		}
 
-		// Trigger autocomplete after the key is processed.
+		// Trigger autocomplete after the key is processed, unless the key was
+		// used to accept an autocomplete entry (in which case the replacement
+		// text itself should not re-open the list).
+		accepted := false
 		if t.autocomplete != nil {
 			currentText := t.GetText()
 			defer func() {
-				if t.GetText() != currentText {
+				if !accepted && t.GetText() != currentText {
 					t.Autocomplete()
 				}
 			}()
@@ -2191,12 +2194,14 @@ func (t *TextArea) InputHandler() func(event *tcell.EventKey, setFocus func(p Pr
 							t.autocompleteListMutex.Lock()
 							t.autocompleteList = nil
 							t.autocompleteListMutex.Unlock()
+							accepted = true
 						}
 					} else {
 						_ = list
 						t.autocompleteListMutex.Lock()
 						t.autocompleteList = nil
 						t.autocompleteListMutex.Unlock()
+						accepted = true
 					}
 				} else {
 					t.autocompleteListMutex.Unlock()
