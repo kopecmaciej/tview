@@ -112,6 +112,7 @@ type InputField struct {
 		background        tcell.Color
 		secondary         tcell.Style
 		showSecondaryText bool
+		borderColor       tcell.Color
 	}
 
 	// An optional function which is called when the user selects an
@@ -395,6 +396,13 @@ func (i *InputField) SetAutocompleteStyles(background tcell.Color, main, selecte
 	return i
 }
 
+// SetAutocompleteBorderColor sets the border color for the autocomplete drop-down.
+// Setting any color other than tcell.ColorDefault enables a visible border.
+func (i *InputField) SetAutocompleteBorderColor(color tcell.Color) *InputField {
+	i.autocompleteStyles.borderColor = color
+	return i
+}
+
 // SetAutocompleteMaxHeight sets the maximum number of items visible in the
 // autocomplete drop-down. Use 0 for no limit.
 func (i *InputField) SetAutocompleteMaxHeight(maxHeight int) *InputField {
@@ -523,6 +531,11 @@ func (i *InputField) Autocomplete() *InputField {
 			SetSelectedStyle(style.selected).
 			SetHighlightFullLine(false).
 			SetBackgroundColor(style.background)
+
+		if style.borderColor != tcell.ColorDefault {
+			i.autocompleteList.SetBorder(true)
+			i.autocompleteList.SetBorderColor(style.borderColor)
+		}
 
 		if i.autocompleteList.showSecondaryText {
 			i.autocompleteList.SetSecondaryTextStyle(style.secondary)
@@ -670,22 +683,30 @@ func (i *InputField) Draw(screen tcell.Screen) {
 			lheight = i.autocompleteMaxHeight
 		}
 
+		// Account for border padding if a border is drawn.
+		borderPad := 0
+		if i.autocompleteStyles.borderColor != tcell.ColorDefault {
+			borderPad = 2
+		}
+		totalWidth := lwidth + borderPad
+		totalHeight := lheight + borderPad
+
 		// We prefer to drop down but if there is no space, maybe drop up?
-		lx := x + labelWidth + i.textArea.cursor.column
+		lx := x + labelWidth + i.textArea.cursor.column - borderPad/2
 		ly := y + 2
 		_, sheight := screen.Size()
-		if ly+lheight >= sheight && ly-2 > lheight-ly {
-			ly = y - lheight
+		if ly+totalHeight >= sheight && ly-2 > totalHeight-ly {
+			ly = y - totalHeight
 			if ly < 0 {
 				ly = 0
 			}
 		}
-		if ly+lheight >= sheight {
-			lheight = sheight - ly
+		if ly+totalHeight >= sheight {
+			totalHeight = sheight - ly
 		}
 
 		// Set the list's position and size
-		i.autocompleteList.SetRect(lx, ly, lwidth, lheight)
+		i.autocompleteList.SetRect(lx, ly, totalWidth, totalHeight)
 		i.autocompleteList.Draw(screen)
 	}
 }

@@ -370,6 +370,7 @@ type TextArea struct {
 		main, selected, secondary tcell.Style
 		background                tcell.Color
 		showSecondaryText         bool
+		borderColor               tcell.Color
 	}
 
 	// An optional function called when the user selects an autocomplete entry.
@@ -1066,6 +1067,13 @@ func (t *TextArea) SetAutocompleteStyles(background tcell.Color, main, selected 
 	return t
 }
 
+// SetAutocompleteBorderColor sets the border color for the autocomplete drop-down.
+// Setting any color other than tcell.ColorDefault enables a visible border.
+func (t *TextArea) SetAutocompleteBorderColor(color tcell.Color) *TextArea {
+	t.autocompleteStyles.borderColor = color
+	return t
+}
+
 // IsAutocompleteVisible returns true if the autocomplete dropdown is currently shown.
 func (t *TextArea) IsAutocompleteVisible() bool {
 	t.autocompleteListMutex.Lock()
@@ -1098,6 +1106,11 @@ func (t *TextArea) Autocomplete() *TextArea {
 			SetSelectedStyle(style.selected).
 			SetHighlightFullLine(false).
 			SetBackgroundColor(style.background)
+
+		if style.borderColor != tcell.ColorDefault {
+			t.autocompleteList.SetBorder(true)
+			t.autocompleteList.SetBorderColor(style.borderColor)
+		}
 	}
 
 	t.autocompleteList.Clear()
@@ -1489,20 +1502,29 @@ func (t *TextArea) Draw(screen tcell.Screen) {
 		if t.autocompleteMaxHeight > 0 && lheight > t.autocompleteMaxHeight {
 			lheight = t.autocompleteMaxHeight
 		}
-		lx := x + t.cursor.actualColumn - columnOffset
+
+		// Account for border padding if a border is drawn.
+		borderPad := 0
+		if t.autocompleteStyles.borderColor != tcell.ColorDefault {
+			borderPad = 2
+		}
+		totalWidth := lwidth + borderPad
+		totalHeight := lheight + borderPad
+
+		lx := x + t.cursor.actualColumn - columnOffset - borderPad/2
 		ly := y + t.cursor.row - t.rowOffset + 1
 		_, sheight := screen.Size()
-		if ly+lheight >= sheight && ly-1 > lheight {
-			ly = y + t.cursor.row - t.rowOffset - lheight
+		if ly+totalHeight >= sheight && ly-1 > totalHeight {
+			ly = y + t.cursor.row - t.rowOffset - totalHeight
 			if ly < 0 {
 				ly = 0
 			}
 		}
-		if ly+lheight >= sheight {
-			lheight = sheight - ly
+		if ly+totalHeight >= sheight {
+			totalHeight = sheight - ly
 		}
-		if lwidth > 0 && lheight > 0 {
-			t.autocompleteList.SetRect(lx, ly, lwidth, lheight)
+		if totalWidth > 0 && totalHeight > 0 {
+			t.autocompleteList.SetRect(lx, ly, totalWidth, totalHeight)
 			t.autocompleteList.Draw(screen)
 		}
 	}
