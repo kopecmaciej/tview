@@ -409,6 +409,17 @@ func (b *Box) DrawForSubclass(screen tcell.Screen, p Primitive) {
 				screen.SetContent(x, y, ' ', nil, background)
 			}
 		}
+	} else if b.paddingTop > 0 || b.paddingBottom > 0 || b.paddingLeft > 0 || b.paddingRight > 0 {
+		// When dontClear is set but padding exists, fill only the padding zone
+		// so it inherits this primitive's background color.
+		innerX, innerY, innerW, innerH := b.GetInnerRect()
+		for y := b.y; y < b.y+b.height; y++ {
+			for x := b.x; x < b.x+b.width; x++ {
+				if y < innerY || y >= innerY+innerH || x < innerX || x >= innerX+innerW {
+					screen.SetContent(x, y, ' ', nil, background)
+				}
+			}
+		}
 	}
 
 	// Draw border.
