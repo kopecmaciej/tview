@@ -1,6 +1,8 @@
 package tview
 
 import (
+	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 	"unicode"
@@ -262,6 +264,12 @@ type TextArea struct {
 	// If set to true and if wrap is also true, lines are split at spaces or
 	// after punctuation characters.
 	wordWrap bool
+
+	// If set to true, a line number gutter is rendered on the left.
+	showLineNumbers bool
+
+	// The style used for line number gutter text.
+	lineNumberStyle tcell.Style
 
 	// The index of the first line shown in the text area.
 	rowOffset int
@@ -814,6 +822,23 @@ func (t *TextArea) SetWordWrap(wrapOnWords bool) *TextArea {
 	return t
 }
 
+// SetLineNumbers enables or disables the line number gutter on the left side
+// of the text area. When enabled, a gutter of appropriate width is reserved
+// and logical line numbers are rendered there.
+func (t *TextArea) SetLineNumbers(show bool) *TextArea {
+	if t.showLineNumbers != show {
+		t.showLineNumbers = show
+		t.reset()
+	}
+	return t
+}
+
+// SetLineNumberStyle sets the style used for the line number gutter.
+func (t *TextArea) SetLineNumberStyle(style tcell.Style) *TextArea {
+	t.lineNumberStyle = style
+	return t
+}
+
 // SetPlaceholder sets the text to be displayed when the text area is empty.
 func (t *TextArea) SetPlaceholder(placeholder string) *TextArea {
 	t.placeholder = placeholder
@@ -1342,6 +1367,33 @@ func (t *TextArea) Draw(screen tcell.Screen) {
 		width -= drawnWidth
 	}
 
+	// Reserve gutter for line numbers and paint its background upfront so it is
+	// visible even when the text area is empty.
+	gutterWidth := 0
+	gutterDigits := 0
+	if t.showLineNumbers && width > 6 {
+		totalLines := strings.Count(t.GetText(), "\n") + 1
+		gutterDigits = len(strconv.Itoa(totalLines))
+		if gutterDigits < 2 {
+			gutterDigits = 2
+		}
+		gutterWidth = gutterDigits + 3 // right-aligned digits + " " + "│" + " "
+		if gutterWidth > width/4 {
+			gutterWidth = 4
+			gutterDigits = gutterWidth - 2
+		}
+		gutterX := x
+		x += gutterWidth
+		width -= gutterWidth
+
+		// Fill the entire gutter column with background colour.
+		for row := 0; row < height; row++ {
+			for col := 0; col < gutterWidth; col++ {
+				screen.SetContent(gutterX+col, y+row, ' ', nil, t.lineNumberStyle)
+			}
+		}
+	}
+
 	// What's the space for the input element?
 	if t.width > 0 && t.width < width {
 		width = t.width
@@ -1392,6 +1444,9 @@ func (t *TextArea) Draw(screen tcell.Screen) {
 		if len(t.placeholder) > 0 {
 			t.drawPlaceholder(screen, x, y, width, height)
 		}
+		if gutterWidth > 0 {
+			t.drawGutterNumber(screen, x-gutterWidth, y, gutterDigits, 1)
+		}
 		return // We're done already.
 	}
 
@@ -1425,6 +1480,20 @@ func (t *TextArea) Draw(screen tcell.Screen) {
 	endPos := pos
 	posX, posY := 0, 0
 	byteOff := t.byteOffsetAt(pos) // Track byte offset for styleFunc.
+
+	// Determine the logical line number for the first visible screen row.
+	logicalLine := 1
+	if gutterWidth > 0 {
+		if t.rowOffset > 0 {
+			bytePos := t.byteOffsetAt(t.lineStarts[t.rowOffset])
+			fullText := t.GetText()
+			if bytePos > 0 && bytePos <= len(fullText) {
+				logicalLine = strings.Count(fullText[:bytePos], "\n") + 1
+			}
+		}
+		t.drawGutterNumber(screen, x-gutterWidth, y, gutterDigits, logicalLine)
+	}
+
 	for pos[0] != 1 {
 		var clusterWidth int
 		prevPos := pos
@@ -1484,6 +1553,13 @@ func (t *TextArea) Draw(screen tcell.Screen) {
 			}
 			posX = 0
 			line++
+			if gutterWidth > 0 {
+				if cluster == "\n" {
+					logicalLine++
+					t.drawGutterNumber(screen, x-gutterWidth, y+posY, gutterDigits, logicalLine)
+				}
+				// Word-wrap continuation: gutter cell stays blank (background already filled).
+			}
 		}
 	}
 
@@ -1533,6 +1609,16 @@ func (t *TextArea) Draw(screen tcell.Screen) {
 // drawPlaceholder draws the placeholder text into the given rectangle. It does
 // not do anything if the text area already contains text or if there is no
 // placeholder text.
+// drawGutterNumber renders a right-aligned line number and a "│" separator at
+// the given screen position. gutterX is the leftmost cell of the gutter column.
+func (t *TextArea) drawGutterNumber(screen tcell.Screen, gutterX, screenY, digits, num int) {
+	numStr := fmt.Sprintf("%*d", digits, num)
+	for i, ch := range []rune(numStr) {
+		screen.SetContent(gutterX+i, screenY, ch, nil, t.lineNumberStyle)
+	}
+	screen.SetContent(gutterX+digits+1, screenY, '│', nil, t.lineNumberStyle)
+}
+
 func (t *TextArea) drawPlaceholder(screen tcell.Screen, x, y, width, height int) {
 	// We use a TextView to draw the placeholder. It will take care of word
 	// wrapping etc.
