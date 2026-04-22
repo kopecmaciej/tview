@@ -668,11 +668,25 @@ func (f *Form) Draw(screen tcell.Screen) {
 	}
 
 	// Determine vertical offset based on the position of the focused item.
+	// scrollMargin keeps a few lines visible ahead of the focused item so the
+	// user can see upcoming fields before reaching the edge.
+	const scrollMargin = 4
 	var offset int
-	if focusedPosition.y+focusedPosition.height > bottomLimit {
-		offset = focusedPosition.y + focusedPosition.height - bottomLimit
+	if focusedPosition.y+focusedPosition.height+scrollMargin > bottomLimit {
+		offset = focusedPosition.y + focusedPosition.height + scrollMargin - bottomLimit
 		if focusedPosition.y-offset < topLimit {
 			offset = focusedPosition.y - topLimit
+		}
+	}
+	// Don't scroll past the last item — cap so the last item's bottom sits at
+	// bottomLimit at most (no phantom blank space from the margin).
+	if len(positions) > 0 {
+		last := positions[len(positions)-1]
+		if maxOffset := last.y + last.height - bottomLimit; offset > maxOffset {
+			if maxOffset < 0 {
+				maxOffset = 0
+			}
+			offset = maxOffset
 		}
 	}
 
