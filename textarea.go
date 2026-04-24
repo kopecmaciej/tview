@@ -1044,6 +1044,49 @@ func (t *TextArea) GetCursorByteOffset() int {
 	return t.byteOffsetAt(t.cursor.pos)
 }
 
+// GetCurrentRow returns the current screen row of the cursor (layout-aware,
+// accounts for word-wrap).
+func (t *TextArea) GetCurrentRow() int {
+	return t.cursor.row
+}
+
+// GetTextAfterCursor returns all text from the cursor position to the end.
+func (t *TextArea) GetTextAfterCursor() string {
+	return t.getTextAfterCursor()
+}
+
+// MoveWordRight moves the cursor to the start of the next word (after=false) or
+// past it (after=true). clamp scrolls the viewport to keep the cursor visible.
+// The selection is cleared so the movement does not produce a visible highlight.
+func (t *TextArea) MoveWordRight(after, clamp bool) {
+	t.moveWordRight(after, clamp)
+	t.selectionStart = t.cursor
+	if t.lastWidth > 0 && t.moved != nil {
+		t.moved()
+	}
+}
+
+// MoveWordLeft moves the cursor to the start of the previous word.
+// The selection is cleared so the movement does not produce a visible highlight.
+func (t *TextArea) MoveWordLeft(clamp bool) {
+	t.moveWordLeft(clamp)
+	t.selectionStart = t.cursor
+	if t.lastWidth > 0 && t.moved != nil {
+		t.moved()
+	}
+}
+
+// MoveCursorTo moves the cursor to screen-space (row, column). Pass column < 0
+// to land at the end of the line.
+// The selection is cleared so the movement does not produce a visible highlight.
+func (t *TextArea) MoveCursorTo(row, column int) {
+	t.moveCursor(row, column)
+	t.selectionStart = t.cursor
+	if t.lastWidth > 0 && t.moved != nil {
+		t.moved()
+	}
+}
+
 // byteOffsetAt returns the byte offset of the given span position within the
 // full text. It walks the piece chain from the beginning.
 func (t *TextArea) byteOffsetAt(pos [3]int) int {
