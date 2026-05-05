@@ -491,6 +491,11 @@ type Table struct {
 
 	selectedRows map[int]bool
 
+	// Visual mode: when true, cursor movement extends the selected row range
+	// anchored at visualAnchor (vim-style v selection).
+	visualMode   bool
+	visualAnchor int
+
 	// A temporary flag which causes the next call to Draw() to force the
 	// current selection to remain visible. It is set to false afterwards.
 	clampToSelection bool
@@ -707,6 +712,48 @@ func (t *Table) GetSelectedRows() []int {
 
 func (t *Table) ClearSelection() {
 	t.selectedRows = make(map[int]bool)
+	t.visualMode = false
+}
+
+// EnterVisualMode starts visual line selection anchored at the current row.
+func (t *Table) EnterVisualMode() *Table {
+	t.visualMode = true
+	t.visualAnchor = t.selectedRow
+	t.updateVisualSelection()
+	return t
+}
+
+// ExitVisualMode leaves visual mode and clears the selection.
+func (t *Table) ExitVisualMode() *Table {
+	t.visualMode = false
+	t.selectedRows = make(map[int]bool)
+	return t
+}
+
+// ToggleVisualMode enters visual mode if inactive, exits it if active.
+func (t *Table) ToggleVisualMode() *Table {
+	if t.visualMode {
+		return t.ExitVisualMode()
+	}
+	return t.EnterVisualMode()
+}
+
+// IsVisualMode reports whether visual selection mode is active.
+func (t *Table) IsVisualMode() bool {
+	return t.visualMode
+}
+
+// updateVisualSelection rebuilds selectedRows to cover the range between
+// visualAnchor and the current selectedRow.
+func (t *Table) updateVisualSelection() {
+	t.selectedRows = make(map[int]bool)
+	start, end := t.visualAnchor, t.selectedRow
+	if start > end {
+		start, end = end, start
+	}
+	for r := start; r <= end; r++ {
+		t.selectedRows[r] = true
+	}
 }
 
 // SetOffset sets how many rows and columns should be skipped when drawing the
@@ -1386,9 +1433,9 @@ func (t *Table) Draw(screen tcell.Screen) {
 	// Color the cell backgrounds. To avoid undesirable artefacts, we combine
 	// the drawing of a cell by background color, selected cells last.
 	type cellInfo struct {
-		x, y, w, h int
-		cell       *TableCell
-		selected   bool
+		x, y, w, h    int
+		cell          *TableCell
+		selected      bool
 		multiSelected bool
 	}
 	cellsByBackgroundColor := make(map[tcell.Color][]*cellInfo)
@@ -1418,12 +1465,12 @@ func (t *Table) Draw(screen tcell.Screen) {
 			}
 			entries, ok := cellsByBackgroundColor[backgroundColor]
 			cellsByBackgroundColor[backgroundColor] = append(entries, &cellInfo{
-				x:        bx,
-				y:        by,
-				w:        bw,
-				h:        bh,
-				cell:     cell,
-				selected: cellSelected,
+				x:             bx,
+				y:             by,
+				w:             bw,
+				h:             bh,
+				cell:          cell,
+				selected:      cellSelected,
 				multiSelected: cellMultiSelected,
 			})
 			if !ok {
@@ -1880,10 +1927,14 @@ func (t *Table) InputHandler() func(event *tcell.EventKey, setFocus func(p Primi
 		}
 
 		// If the selection has changed, notify the handler.
-		if t.selectionChanged != nil &&
-			(t.rowsSelectable && previouslySelectedRow != t.selectedRow ||
-				t.columnsSelectable && previouslySelectedColumn != t.selectedColumn) {
-			t.selectionChanged(t.selectedRow, t.selectedColumn)
+		if t.rowsSelectable && previouslySelectedRow != t.selectedRow ||
+			t.columnsSelectable && previouslySelectedColumn != t.selectedColumn {
+			if t.visualMode && t.rowsSelectable {
+				t.updateVisualSelection()
+			}
+			if t.selectionChanged != nil {
+				t.selectionChanged(t.selectedRow, t.selectedColumn)
+			}
 		}
 	})
 }
