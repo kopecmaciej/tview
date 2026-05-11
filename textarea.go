@@ -1142,11 +1142,25 @@ func (t *TextArea) SetAutocompleteBorderColor(color tcell.Color) *TextArea {
 	return t
 }
 
+// SetAutocompleteMaxHeight sets the maximum number of items visible in the
+// autocomplete drop-down before scrolling kicks in. Use 0 for no limit.
+func (t *TextArea) SetAutocompleteMaxHeight(maxHeight int) *TextArea {
+	t.autocompleteMaxHeight = maxHeight
+	return t
+}
+
 // IsAutocompleteVisible returns true if the autocomplete dropdown is currently shown.
 func (t *TextArea) IsAutocompleteVisible() bool {
 	t.autocompleteListMutex.Lock()
 	defer t.autocompleteListMutex.Unlock()
 	return t.autocompleteList != nil
+}
+
+// HideAutocomplete closes the autocomplete dropdown if it is open.
+func (t *TextArea) HideAutocomplete() {
+	t.autocompleteListMutex.Lock()
+	t.autocompleteList = nil
+	t.autocompleteListMutex.Unlock()
 }
 
 // Autocomplete invokes the autocomplete callback and populates (or clears) the
