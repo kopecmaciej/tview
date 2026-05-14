@@ -1,6 +1,8 @@
 package tview
 
 import (
+	"strings"
+
 	"github.com/gdamore/tcell/v2"
 )
 
@@ -52,6 +54,9 @@ type ButtonGroup struct {
 
 	// Set by the Form class; called when the user leaves this form item.
 	finished func(tcell.Key)
+
+	// Optional icons displayed above each option label in card mode.
+	icons []string
 }
 
 // NewButtonGroup returns a new ButtonGroup with the given label, options, and
@@ -161,8 +166,37 @@ func (b *ButtonGroup) GetFieldWidth() int {
 	return 0
 }
 
-// GetFieldHeight returns 1 (single row).
+// SetSelectedStyle sets the style for the confirmed (current) option in flat mode.
+func (b *ButtonGroup) SetSelectedStyle(style tcell.Style) *ButtonGroup {
+	b.selectedStyle = style
+	return b
+}
+
+// SetUnselectedStyle sets the style for options that are not selected or focused.
+func (b *ButtonGroup) SetUnselectedStyle(style tcell.Style) *ButtonGroup {
+	b.unselectedStyle = style
+	return b
+}
+
+// SetCursorStyle sets the style for the option under the cursor while focused.
+func (b *ButtonGroup) SetCursorStyle(style tcell.Style) *ButtonGroup {
+	b.cursorStyle = style
+	return b
+}
+
+// SetIcons sets per-option icons displayed above the option label (card mode).
+// When icons are set, GetFieldHeight returns 4 and each option renders as a
+// tall card with the icon on the first inner row and the label on the second.
+func (b *ButtonGroup) SetIcons(icons []string) *ButtonGroup {
+	b.icons = icons
+	return b
+}
+
+// GetFieldHeight returns 6 in card mode (icons set), 1 otherwise.
 func (b *ButtonGroup) GetFieldHeight() int {
+	if len(b.icons) > 0 {
+		return 6
+	}
 	return 1
 }
 
@@ -206,32 +240,104 @@ func (b *ButtonGroup) Draw(screen tcell.Screen) {
 		x += drawnWidth
 	}
 
-	// Draw each option block.
+	if len(b.icons) > 0 {
+		b.drawCards(screen, x, y, rightLimit)
+	} else {
+		b.drawInline(screen, x, y, rightLimit)
+	}
+}
+
+func (b *ButtonGroup) styleFor(i int) tcell.Style {
+	switch {
+	case b.disabled:
+		return b.unselectedStyle.Background(b.backgroundColor)
+	case b.HasFocus() && i == b.focusedOption:
+		return b.cursorStyle
+	case len(b.icons) == 0 && i == b.currentOption:
+		// In flat mode the confirmed selection is visually distinct.
+		// In card mode there is no persistent selection — only the cursor matters.
+		return b.selectedStyle
+	default:
+		return b.unselectedStyle
+	}
+}
+
+func (b *ButtonGroup) drawInline(screen tcell.Screen, x, y, rightLimit int) {
 	for i, option := range b.options {
 		text := " " + option + " "
 		textWidth := len([]rune(text))
-
 		if x >= rightLimit {
 			break
 		}
-
-		// Determine style for this block.
-		var style tcell.Style
-		switch {
-		case b.disabled:
-			style = b.unselectedStyle.Background(b.backgroundColor)
-		case b.HasFocus() && i == b.focusedOption:
-			style = b.cursorStyle
-		case i == b.currentOption:
-			style = b.selectedStyle
-		default:
-			style = b.unselectedStyle
-		}
-
+		style := b.styleFor(i)
 		_, bg, _ := style.Decompose()
 		printWithStyle(screen, text, x, y, 0, textWidth, AlignLeft, style, bg == tcell.ColorDefault)
-		x += textWidth + 1 // +1 gap between blocks
+		x += textWidth + 1
 	}
+}
+
+func (b *ButtonGroup) drawCards(screen tcell.Screen, startX, y, rightLimit int) {
+	// Uniform card width so all cards look identical.
+	cardWidth := 14
+	for i, option := range b.options {
+		if w := TaggedStringWidth(option) + 6; w > cardWidth {
+			cardWidth = w
+		}
+		if i < len(b.icons) {
+			if w := TaggedStringWidth(b.icons[i]) + 6; w > cardWidth {
+				cardWidth = w
+			}
+		}
+	}
+
+	const gap = 3
+	availWidth := rightLimit - startX
+	totalCardsWidth := len(b.options)*cardWidth + max(len(b.options)-1, 0)*gap
+
+	// Center the block of cards within the available space.
+	x := startX
+	if totalCardsWidth < availWidth {
+		x += (availWidth - totalCardsWidth) / 2
+	}
+
+	innerWidth := cardWidth - 2 // space between the two border bars
+	topBorder := "╭" + strings.Repeat("─", innerWidth) + "╮"
+	botBorder := "╰" + strings.Repeat("─", innerWidth) + "╯"
+	blankRow := "│" + strings.Repeat(" ", innerWidth) + "│"
+
+	for i, option := range b.options {
+		if x+cardWidth > rightLimit {
+			break
+		}
+		style := b.styleFor(i)
+		_, bg, _ := style.Decompose()
+		transparent := bg == tcell.ColorDefault
+
+		icon := ""
+		if i < len(b.icons) {
+			icon = b.icons[i]
+		}
+
+		printWithStyle(screen, topBorder, x, y, 0, cardWidth, AlignLeft, style, transparent)
+		printWithStyle(screen, blankRow, x, y+1, 0, cardWidth, AlignLeft, style, transparent)
+		printWithStyle(screen, "│"+cardCenteredRow(icon, innerWidth)+"│", x, y+2, 0, cardWidth, AlignLeft, style, transparent)
+		printWithStyle(screen, "│"+cardCenteredRow(option, innerWidth)+"│", x, y+3, 0, cardWidth, AlignLeft, style, transparent)
+		printWithStyle(screen, blankRow, x, y+4, 0, cardWidth, AlignLeft, style, transparent)
+		printWithStyle(screen, botBorder, x, y+5, 0, cardWidth, AlignLeft, style, transparent)
+
+		x += cardWidth + gap
+	}
+}
+
+// cardCenteredRow returns text padded with spaces so its display width equals width.
+func cardCenteredRow(text string, width int) string {
+	textW := TaggedStringWidth(text)
+	if textW >= width {
+		return text
+	}
+	left := (width - textW) / 2
+	right := width - textW - left
+	return strings.Repeat(" ", left) + text + strings.Repeat(" ", right)
 }
 
 // InputHandler returns the handler for this primitive.
