@@ -796,6 +796,13 @@ RowLoop:
 	return t
 }
 
+// SwapCursorAndSelectionStart swaps the blinking cursor position and the
+// selection start. Use this after Select when you want the cursor to appear at
+// the lower byte offset (e.g. backward visual selections in vim mode).
+func (t *TextArea) SwapCursorAndSelectionStart() {
+	t.cursor, t.selectionStart = t.selectionStart, t.cursor
+}
+
 // SetWrap sets the flag that, if true, leads to lines that are longer than the
 // available width being wrapped onto the next line. If false, any characters
 // beyond the available width are not displayed.
@@ -1596,6 +1603,12 @@ func (t *TextArea) Draw(screen tcell.Screen) {
 		// Draw character.
 		if posX+clusterWidth-columnOffset <= width && posX-columnOffset >= 0 && clusterWidth > 0 {
 			screen.SetContent(x+posX-columnOffset, y+posY, runes[0], runes[1:], style)
+		}
+
+		// Highlight newlines as a space so vim visual selections spanning multiple
+		// lines show the newline position as selected, matching vim's behaviour.
+		if cluster == "\n" && inSelection && posX-columnOffset >= 0 && posX-columnOffset < width {
+			screen.SetContent(x+posX-columnOffset, y+posY, ' ', nil, style)
 		}
 
 		byteOff += len(cluster)
