@@ -1,7 +1,6 @@
 package tview
 
 import (
-	"strings"
 	"sync"
 	"time"
 
@@ -359,10 +358,7 @@ func (a *Application) Run() error {
 	}()
 
 	// Start event loop.
-	var (
-		pasteBuffer strings.Builder
-		pasting     bool // Set to true while we receive paste key events.
-	)
+	var pasting bool // Set to true while we are receiving a bracketed paste.
 EventLoop:
 	for {
 		select {
@@ -374,16 +370,9 @@ EventLoop:
 
 			switch event := event.(type) {
 			case *tcell.EventKey:
-				// If we are pasting, collect runes, nothing else.
+				// While pasting, the content is delivered in the paste event's
+				// Data(), so any stray key events are ignored.
 				if pasting {
-					switch event.Key() {
-					case tcell.KeyRune:
-						pasteBuffer.WriteRune(event.Rune())
-					case tcell.KeyEnter:
-						pasteBuffer.WriteRune('\n')
-					case tcell.KeyTab:
-						pasteBuffer.WriteRune('\t')
-					}
 					break
 				}
 
@@ -430,16 +419,16 @@ EventLoop:
 				}
 				if event.Start() {
 					pasting = true
-					pasteBuffer.Reset()
 				} else if event.End() {
 					pasting = false
+					pastedText := string(event.Data())
 					a.RLock()
 					root := a.root
 					a.RUnlock()
-					if root != nil && root.HasFocus() && pasteBuffer.Len() > 0 {
+					if root != nil && root.HasFocus() && len(pastedText) > 0 {
 						// Pass paste event to the root primitive.
 						if handler := root.PasteHandler(); handler != nil {
-							handler(pasteBuffer.String(), func(p Primitive) {
+							handler(pastedText, func(p Primitive) {
 								a.SetFocus(p)
 							})
 						}

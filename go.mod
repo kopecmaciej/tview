@@ -2,6 +2,10 @@ module github.com/kopecmaciej/tview
 
 go 1.24.0
 
+replace (
+	github.com/gdamore/tcell/v2 => github.com/kopecmaciej/tcell/v2 v2.13.12
+)
+
 require (
 	github.com/gdamore/tcell/v2 v2.13.8
 	github.com/lucasb-eyer/go-colorful v1.3.0
