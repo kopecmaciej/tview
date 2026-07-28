@@ -145,9 +145,9 @@ func (m *Modal) AddButtons(labels []string) *Modal {
 				}
 				switch event.Rune() {
 				case 'h':
-					return tcell.NewEventKey(tcell.KeyTab, 0, tcell.ModNone)
-				case 'l':
 					return tcell.NewEventKey(tcell.KeyBacktab, 0, tcell.ModNone)
+				case 'l':
+					return tcell.NewEventKey(tcell.KeyTab, 0, tcell.ModNone)
 				}
 				return event
 			})
