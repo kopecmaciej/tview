@@ -321,6 +321,23 @@ type TreeView struct {
 	// Temporarily set to true while we know that the tree has not changed and
 	// therefore does not need to be reprocessed.
 	stableNodes bool
+
+	// If non-nil, overrides DefaultVimKeys for this tree view.
+	vimKeys *bool
+}
+
+// SetVimKeys overrides the global DefaultVimKeys for this tree view, enabling
+// or disabling built-in vim-style rune navigation (j/k/J/K/g/G).
+func (t *TreeView) SetVimKeys(v bool) *TreeView {
+	t.vimKeys = &v
+	return t
+}
+
+func (t *TreeView) vimKeysEnabled() bool {
+	if t.vimKeys != nil {
+		return *t.vimKeys
+	}
+	return DefaultVimKeys
 }
 
 // NewTreeView returns a new tree view.
@@ -806,22 +823,25 @@ func (t *TreeView) InputHandler() func(event *tcell.EventKey, setFocus func(p Pr
 			t.movement = treeMove
 			t.step = -height
 		case tcell.KeyRune:
-			switch event.Rune() {
-			case 'g':
-				t.movement = treeHome
-			case 'G':
-				t.movement = treeEnd
-			case 'j':
-				t.movement = treeMove
-				t.step = 1
-			case 'J':
-				t.movement = treeChild
-			case 'k':
-				t.movement = treeMove
-				t.step = -1
-			case 'K':
-				t.movement = treeParent
-			case ' ':
+			if t.vimKeysEnabled() {
+				switch event.Rune() {
+				case 'g':
+					t.movement = treeHome
+				case 'G':
+					t.movement = treeEnd
+				case 'j':
+					t.movement = treeMove
+					t.step = 1
+				case 'J':
+					t.movement = treeChild
+				case 'k':
+					t.movement = treeMove
+					t.step = -1
+				case 'K':
+					t.movement = treeParent
+				}
+			}
+			if event.Rune() == ' ' {
 				selectNode()
 			}
 		case tcell.KeyEnter:

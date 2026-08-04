@@ -57,6 +57,23 @@ type ButtonGroup struct {
 
 	// Optional icons displayed above each option label in card mode.
 	icons []string
+
+	// If non-nil, overrides DefaultVimKeys for this button group.
+	vimKeys *bool
+}
+
+// SetVimKeys overrides the global DefaultVimKeys for this button group,
+// enabling or disabling built-in vim-style navigation (h/l).
+func (b *ButtonGroup) SetVimKeys(v bool) *ButtonGroup {
+	b.vimKeys = &v
+	return b
+}
+
+func (b *ButtonGroup) vimKeysEnabled() bool {
+	if b.vimKeys != nil {
+		return *b.vimKeys
+	}
+	return DefaultVimKeys
 }
 
 // NewButtonGroup returns a new ButtonGroup with the given label, options, and
@@ -67,13 +84,13 @@ func NewButtonGroup(label string, options []string, initialOption int, changed f
 		initialOption = 0
 	}
 	return &ButtonGroup{
-		Box:                  NewBox(),
-		label:                label,
-		options:              options,
-		currentOption:        initialOption,
-		focusedOption:        initialOption,
-		changed:              changed,
-		labelStyle:           tcell.StyleDefault.Foreground(Styles.SecondaryTextColor),
+		Box:             NewBox(),
+		label:           label,
+		options:         options,
+		currentOption:   initialOption,
+		focusedOption:   initialOption,
+		changed:         changed,
+		labelStyle:      tcell.StyleDefault.Foreground(Styles.SecondaryTextColor),
 		selectedStyle:   tcell.StyleDefault.Background(Styles.BorderColor).Foreground(Styles.PrimaryTextColor),
 		unselectedStyle: tcell.StyleDefault.Background(Styles.ContrastBackgroundColor).Foreground(Styles.PrimaryTextColor),
 		cursorStyle:     tcell.StyleDefault.Background(Styles.FocusColor).Foreground(Styles.PrimitiveBackgroundColor),
@@ -368,11 +385,11 @@ func (b *ButtonGroup) InputHandler() func(event *tcell.EventKey, setFocus func(p
 		case tcell.KeyRune:
 			switch event.Rune() {
 			case 'h':
-				if b.focusedOption > 0 {
+				if b.vimKeysEnabled() && b.focusedOption > 0 {
 					b.focusedOption--
 				}
 			case 'l':
-				if b.focusedOption < len(b.options)-1 {
+				if b.vimKeysEnabled() && b.focusedOption < len(b.options)-1 {
 					b.focusedOption++
 				}
 			case ' ':

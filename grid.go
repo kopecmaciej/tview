@@ -56,6 +56,23 @@ type Grid struct {
 
 	// The color of the borders around grid items.
 	bordersColor tcell.Color
+
+	// If non-nil, overrides DefaultVimKeys for this grid.
+	vimKeys *bool
+}
+
+// SetVimKeys overrides the global DefaultVimKeys for this grid, enabling
+// or disabling built-in vim-style rune navigation (j/k/h/l/g/G).
+func (g *Grid) SetVimKeys(v bool) *Grid {
+	g.vimKeys = &v
+	return g
+}
+
+func (g *Grid) vimKeysEnabled() bool {
+	if g.vimKeys != nil {
+		return *g.vimKeys
+	}
+	return DefaultVimKeys
 }
 
 // NewGrid returns a new grid-based layout container with no initial primitives.
@@ -672,19 +689,21 @@ func (g *Grid) InputHandler() func(event *tcell.EventKey, setFocus func(p Primit
 		// Process our own key events if we have direct focus.
 		switch event.Key() {
 		case tcell.KeyRune:
-			switch event.Rune() {
-			case 'g':
-				g.rowOffset, g.columnOffset = 0, 0
-			case 'G':
-				g.rowOffset = math.MaxInt32
-			case 'j':
-				g.rowOffset++
-			case 'k':
-				g.rowOffset--
-			case 'h':
-				g.columnOffset--
-			case 'l':
-				g.columnOffset++
+			if g.vimKeysEnabled() {
+				switch event.Rune() {
+				case 'g':
+					g.rowOffset, g.columnOffset = 0, 0
+				case 'G':
+					g.rowOffset = math.MaxInt32
+				case 'j':
+					g.rowOffset++
+				case 'k':
+					g.rowOffset--
+				case 'h':
+					g.columnOffset--
+				case 'l':
+					g.columnOffset++
+				}
 			}
 		case tcell.KeyHome:
 			g.rowOffset, g.columnOffset = 0, 0

@@ -238,6 +238,23 @@ type TextView struct {
 	// A callback function set by the Form class and called when the user leaves
 	// this form item.
 	finished func(tcell.Key)
+
+	// If non-nil, overrides DefaultVimKeys for this text view.
+	vimKeys *bool
+}
+
+// SetVimKeys overrides the global DefaultVimKeys for this text view, enabling
+// or disabling built-in vim-style rune navigation (j/k/h/l/g/G).
+func (t *TextView) SetVimKeys(v bool) *TextView {
+	t.vimKeys = &v
+	return t
+}
+
+func (t *TextView) vimKeysEnabled() bool {
+	if t.vimKeys != nil {
+		return *t.vimKeys
+	}
+	return DefaultVimKeys
 }
 
 // NewTextView returns a new text view.
@@ -1320,23 +1337,25 @@ func (t *TextView) InputHandler() func(event *tcell.EventKey, setFocus func(p Pr
 
 		switch key {
 		case tcell.KeyRune:
-			switch event.Rune() {
-			case 'g': // Home.
-				t.trackEnd = false
-				t.lineOffset = 0
-				t.columnOffset = 0
-			case 'G': // End.
-				t.trackEnd = true
-				t.columnOffset = 0
-			case 'j': // Down.
-				t.lineOffset++
-			case 'k': // Up.
-				t.trackEnd = false
-				t.lineOffset--
-			case 'h': // Left.
-				t.columnOffset--
-			case 'l': // Right.
-				t.columnOffset++
+			if t.vimKeysEnabled() {
+				switch event.Rune() {
+				case 'g': // Home.
+					t.trackEnd = false
+					t.lineOffset = 0
+					t.columnOffset = 0
+				case 'G': // End.
+					t.trackEnd = true
+					t.columnOffset = 0
+				case 'j': // Down.
+					t.lineOffset++
+				case 'k': // Up.
+					t.trackEnd = false
+					t.lineOffset--
+				case 'h': // Left.
+					t.columnOffset--
+				case 'l': // Right.
+					t.columnOffset++
+				}
 			}
 		case tcell.KeyHome:
 			t.trackEnd = false

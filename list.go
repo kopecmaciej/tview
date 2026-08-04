@@ -100,6 +100,23 @@ type List struct {
 
 	// Gap between items
 	itemGap int
+
+	// If non-nil, overrides DefaultVimKeys for this list.
+	vimKeys *bool
+}
+
+// SetVimKeys overrides the global DefaultVimKeys for this list, enabling
+// or disabling built-in vim-style rune navigation (j/k/g/G).
+func (l *List) SetVimKeys(v bool) *List {
+	l.vimKeys = &v
+	return l
+}
+
+func (l *List) vimKeysEnabled() bool {
+	if l.vimKeys != nil {
+		return *l.vimKeys
+	}
+	return DefaultVimKeys
 }
 
 // NewList returns a new list.
@@ -719,14 +736,16 @@ func (l *List) InputHandler() func(event *tcell.EventKey, setFocus func(p Primit
 			}
 		case tcell.KeyRune:
 			ch := event.Rune()
-			if ch == 'j' {
-				l.currentItem++
-			} else if ch == 'k' {
-				l.currentItem--
-			} else if ch == 'g' {
-				l.currentItem = 0
-			} else if ch == 'G' {
-				l.currentItem = len(l.items) - 1
+			if l.vimKeysEnabled() {
+				if ch == 'j' {
+					l.currentItem++
+				} else if ch == 'k' {
+					l.currentItem--
+				} else if ch == 'g' {
+					l.currentItem = 0
+				} else if ch == 'G' {
+					l.currentItem = len(l.items) - 1
+				}
 			}
 			if ch != ' ' {
 				// It's not a space bar. Is it a shortcut?

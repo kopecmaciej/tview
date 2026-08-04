@@ -33,6 +33,23 @@ type Modal struct {
 	// height: auto-sized to content).
 	widthPercent  int
 	heightPercent int
+
+	// If non-nil, overrides DefaultVimKeys for this modal.
+	vimKeys *bool
+}
+
+// SetVimKeys overrides the global DefaultVimKeys for this modal, enabling
+// or disabling built-in vim-style button navigation (h/l).
+func (m *Modal) SetVimKeys(v bool) *Modal {
+	m.vimKeys = &v
+	return m
+}
+
+func (m *Modal) vimKeysEnabled() bool {
+	if m.vimKeys != nil {
+		return *m.vimKeys
+	}
+	return DefaultVimKeys
 }
 
 // NewModal returns a new modal message window.
@@ -145,9 +162,13 @@ func (m *Modal) AddButtons(labels []string) *Modal {
 				}
 				switch event.Rune() {
 				case 'h':
-					return tcell.NewEventKey(tcell.KeyBacktab, 0, tcell.ModNone)
+					if m.vimKeysEnabled() {
+						return tcell.NewEventKey(tcell.KeyBacktab, 0, tcell.ModNone)
+					}
 				case 'l':
-					return tcell.NewEventKey(tcell.KeyTab, 0, tcell.ModNone)
+					if m.vimKeysEnabled() {
+						return tcell.NewEventKey(tcell.KeyTab, 0, tcell.ModNone)
+					}
 				}
 				return event
 			})

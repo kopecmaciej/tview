@@ -555,6 +555,23 @@ type Table struct {
 
 	// The style of the scrollbar track.
 	scrollBarTrackStyle tcell.Style
+
+	// If non-nil, overrides DefaultVimKeys for this table.
+	vimKeys *bool
+}
+
+// SetVimKeys overrides the global DefaultVimKeys for this table, enabling
+// or disabling built-in vim-style rune navigation (j/k/h/l/g/G/0/$).
+func (t *Table) SetVimKeys(v bool) *Table {
+	t.vimKeys = &v
+	return t
+}
+
+func (t *Table) vimKeysEnabled() bool {
+	if t.vimKeys != nil {
+		return *t.vimKeys
+	}
+	return DefaultVimKeys
 }
 
 // NewTable returns a new table.
@@ -1886,23 +1903,25 @@ func (t *Table) InputHandler() func(event *tcell.EventKey, setFocus func(p Primi
 
 		switch key {
 		case tcell.KeyRune:
-			switch event.Rune() {
-			case 'g':
-				home()
-			case 'G':
-				end()
-			case 'j':
-				down()
-			case 'k':
-				up()
-			case 'h':
-				left()
-			case 'l':
-				right()
-			case '0':
-				firstColumn()
-			case '$':
-				endColumn()
+			if t.vimKeysEnabled() {
+				switch event.Rune() {
+				case 'g':
+					home()
+				case 'G':
+					end()
+				case 'j':
+					down()
+				case 'k':
+					up()
+				case 'h':
+					left()
+				case 'l':
+					right()
+				case '0':
+					firstColumn()
+				case '$':
+					endColumn()
+				}
 			}
 		case tcell.KeyHome:
 			home()
