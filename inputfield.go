@@ -876,15 +876,7 @@ func (i *InputField) MouseHandler() func(action MouseAction, event *tcell.EventM
 // PasteHandler returns the handler for this primitive.
 func (i *InputField) PasteHandler() func(pastedText string, setFocus func(p Primitive)) {
 	return i.WrapPasteHandler(func(pastedText string, setFocus func(p Primitive)) {
-		// Input field may be disabled.
 		if i.textArea.GetDisabled() {
-			return
-		}
-
-		// The autocomplete drop down may be open.
-		i.autocompleteListMutex.Lock()
-		defer i.autocompleteListMutex.Unlock()
-		if i.autocompleteList != nil {
 			return
 		}
 
@@ -893,7 +885,18 @@ func (i *InputField) PasteHandler() func(pastedText string, setFocus func(p Prim
 			return
 		}
 
+		currentText := i.textArea.GetText()
+
 		// Forward the pasted text to the text area.
 		i.textArea.PasteHandler()(pastedText, setFocus)
+
+		// Keep the autocomplete drop down and changed handler in sync with the pasted text.
+		newText := i.textArea.GetText()
+		if newText != currentText {
+			i.Autocomplete()
+			if i.changed != nil {
+				i.changed(newText)
+			}
+		}
 	})
 }
